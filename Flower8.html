@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Globe Amaranth (Gomphrena globosa)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 76% 15%, rgba(255, 236, 190, 0.95) 0, rgba(255, 236, 190, 0.5) 12%, rgba(255, 236, 190, 0) 40%),
+        radial-gradient(circle at 14% 24%, rgba(255, 214, 230, 0.6) 0, rgba(255, 214, 230, 0) 8%),
+        radial-gradient(circle at 32% 12%, rgba(255, 244, 214, 0.55) 0, rgba(255, 244, 214, 0) 6%),
+        radial-gradient(circle at 90% 40%, rgba(236, 214, 255, 0.55) 0, rgba(236, 214, 255, 0) 9%),
+        radial-gradient(circle at 54% 30%, rgba(255, 226, 238, 0.5) 0, rgba(255, 226, 238, 0) 7%),
+        linear-gradient(180deg, #fff3e4 0%, #f4dfe6 30%, #d9c8e8 55%, #a3b38d 80%, #6b8a5c 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(40, 70, 50, 0.22);
+      border-radius: 12px;
+      color: rgba(25, 55, 40, 0.85);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-arrow:hover { background: rgba(255, 255, 255, 0.7); color: #0f2a1c; }
+    .nav-arrow:active { transform: translateY(-50%) scale(0.94); }
+    .nav-arrow.prev { left: 12px; }
+    .nav-arrow.next { right: 12px; }
+
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(25, 55, 40, 0.9);
+      background: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(40, 70, 50, 0.22);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .send-btn:hover { background: rgba(255, 255, 255, 0.7); color: #0f2a1c; }
+    .send-btn:active { transform: scale(0.96); }
+    .send-btn.copied {
+      color: #1d4f8f;
+      border-color: rgba(29, 79, 143, 0.5);
+      background: rgba(190, 215, 255, 0.55);
+    }
+
+    .caption {
+      position: fixed;
+      left: 50%;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 6px 14px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      color: rgba(25, 55, 40, 0.85);
+      background: rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      pointer-events: none;
+      transition: opacity 1.2s ease;
+    }
+    .caption.hide { opacity: 0; }
+
+    .status {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      font-size: 14px;
+      color: rgba(25, 55, 40, 0.8);
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+    }
+    .status.hide { opacity: 0; }
+
+    @media (max-width: 600px) {
+      .nav-arrow { width: 32px; height: 46px; font-size: 18px; border-radius: 10px; }
+      .nav-arrow.prev { left: 8px; }
+      .nav-arrow.next { right: 8px; }
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+      .caption { font-size: 11px; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower7.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower9.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower8.html">Send to someone</button>
+  <div class="caption" id="caption">Globe amaranth · drag to turn · pinch or scroll to zoom</div>
+  <div class="status" id="status">Growing the garden…</div>
+  <noscript><div class="status">This page needs JavaScript and WebGL.</div></noscript>
+
+  <script>
+    // Share button (with a fallback for pages opened without clipboard permission, e.g. file://)
+    const sendBtn = document.getElementById('sendToSomeoneBtn');
+    let sendTimer;
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand && document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (!ok) throw new Error('copy not supported');
+    }
+
+    sendBtn.addEventListener('click', async () => {
+      const url = new URL(sendBtn.dataset.targetFile, window.location.href).href;
+      try {
+        await copyText(url);
+        sendBtn.textContent = 'Link copied';
+        sendBtn.classList.add('copied');
+      } catch (err) {
+        console.error('Copy failed:', err);
+        sendBtn.textContent = 'Copy failed';
+        sendBtn.classList.remove('copied');
+      }
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(() => {
+        sendBtn.textContent = 'Send to someone';
+        sendBtn.classList.remove('copied');
+      }, 2000);
+    });
+
+    // If the 3D library never loads (offline, blocked CDN), say so instead of showing a blank page.
+    setTimeout(() => {
+      if (!window.__flowerReady) {
+        document.getElementById('status').textContent =
+          'Could not load the 3D library. Check your connection and reload.';
+      }
+    }, 9000);
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Y_AXIS = V3(0, 1, 0);
+    const UP = V3(0, 1, 0);
+    const TAU = Math.PI * 2;
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const col = (hex) => new THREE.Color(hex);
+    const easeOutCubic = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+    const easeOutBack = (x) => { const c1 = 1.70158; const x1 = clamp(x, 0, 1) - 1; return 1 + (c1 + 1) * x1 * x1 * x1 + c1 * x1 * x1; };
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Seeded random: the garden is identical on every load.
+    const rand = (() => {
+      let s = 8080808;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    // --- 1. RENDERER ---
+    let pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    camera.position.set(0, 2.3, 8.8);
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, alpha: true });
+    } catch (err) {
+      document.getElementById('status').textContent = 'Your browser could not start WebGL, so the 3D flowers cannot be shown.';
+      throw err;
+    }
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.appendChild(renderer.domElement);
+
+    {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+    }
+
+    // Resize only touches aspect and fov, so the user's orbit and zoom are never reset.
+    function frame() {
+      const aspect = window.innerWidth / window.innerHeight;
+      const halfTan = Math.max(Math.tan(THREE.MathUtils.degToRad(19)), 3.6 / (9.2 * aspect));
+      camera.aspect = aspect;
+      camera.fov = 2 * THREE.MathUtils.radToDeg(Math.atan(halfTan));
+      camera.updateProjectionMatrix();
+    }
+    frame();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.rotateSpeed = 0.6;
+    controls.enablePan = false;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 16;
+    controls.minPolarAngle = 0.4;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.target.set(0, 1.3, 0);
+
+    // --- 2. LIGHTING: warm late-afternoon sun, soft sky ---
+    scene.add(new THREE.HemisphereLight(0xfff4ea, 0x7a6a4a, 1.0));
+    const sun = new THREE.DirectionalLight(0xffe2b8, 2.7);
+    sun.position.set(-4, 7, 6);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xe6d8ff, 1.0);
+    fill.position.set(5, 3, -4);
+    scene.add(fill);
+
+    // --- 3. GEOMETRY HELPERS ---
+    // Grid surface. fn(fu, fv) takes fractions 0..1 and returns [x, y, z]; uv = (fu, fv).
+    function buildGrid(nu, nv, fn) {
+      const pos = [];
+      const uv = [];
+      const index = [];
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          const p = fn(i / nu, j / nv);
+          pos.push(p[0], p[1], p[2]);
+          uv.push(i / nu, j / nv);
+        }
+      }
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i;
+          index.push(a, a + nu + 1, a + 1, a + 1, a + nu + 1, a + nu + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Vertex colors from (u -1..1, v 0..1); uv is dropped so pieces can merge.
+    function paintUV(geo, fn) {
+      const uv = geo.attributes.uv;
+      const colors = [];
+      for (let i = 0; i < uv.count; i++) colors.push(...fn(uv.getX(i) * 2 - 1, uv.getY(i)));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    function paintSolid(geo, r, g, b) {
+      const colors = [];
+      for (let i = 0; i < geo.attributes.position.count; i++) colors.push(r, g, b);
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    // Vertex colors from the vertex height.
+    function paintY(geo, fn) {
+      const p = geo.attributes.position;
+      const colors = [];
+      for (let i = 0; i < p.count; i++) colors.push(...fn(p.getY(i)));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    // Orientation whose local +Y is `dir` and whose local +Z leans toward `ref`.
+    function basisQuat(dir, ref) {
+      const y = dir.clone().normalize();
+      let z = ref.clone().addScaledVector(y, -ref.dot(y));
+      if (z.lengthSq() < 1e-6) z = V3(0, 0, 1).addScaledVector(y, -y.z);
+      z.normalize();
+      const x = new THREE.Vector3().crossVectors(y, z);
+      return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    }
+
+    // Tube with a vertex-color gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 10, rad = 5) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = col(c0);
+      const to = col(c1);
+      const c = new THREE.Color();
+      const pos = [];
+      const nor = [];
+      const colors = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        c.lerpColors(from, to, t);
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * TAU;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(c.r, c.g, c.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    function radialTex(stops) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 128;
+      const c = canvas.getContext('2d');
+      const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+      for (const [o, color] of stops) g.addColorStop(o, color);
+      c.fillStyle = g;
+      c.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    // --- 4. THE GLOBE AMARANTH HEAD ---
+    // Gomphrena globosa: a plump, slightly egg-shaped ball of papery, pointed bracts packed like shingles,
+    // with tiny yellow-orange true flowers poking out between them. The head's base sits at the origin, pointing along +Y.
+    const HA = 0.27; // equatorial radius
+    const HB = 0.32; // polar radius
+
+    // Egg profile: a little fuller toward the base than at the tip.
+    const surfP = (phi, lam) => {
+      const r = HA * (1 - 0.1 * Math.sin(phi)) * Math.cos(phi);
+      return V3(r * Math.cos(lam), HB * Math.sin(phi), r * Math.sin(lam));
+    };
+    const surface = (phi, lam) => {
+      const e = 1e-3;
+      const P = surfP(phi, lam);
+      const Tl = surfP(phi, lam + e).sub(surfP(phi, lam - e)).normalize();
+      const Tm = surfP(phi + e, lam).sub(surfP(phi - e, lam)).normalize();
+      const N = new THREE.Vector3().crossVectors(Tm, Tl).normalize();
+      return { P, N, Tl, Tm };
+    };
+
+    // Neutral brightness only: the per-head color comes from instanceColor.
+    const headGeo = (() => {
+      const ROWS = 12;
+      const parts = [];
+
+      const core = new THREE.SphereGeometry(1, 10, 8);
+      core.scale(HA * 0.86, HB * 0.9, HA * 0.86);
+      parts.push(paintSolid(core, 0.28, 0.28, 0.28));
+
+      for (let j = 0; j < ROWS; j++) {
+        const rowT = (j + 0.5) / ROWS;
+        const phi = lerp(-1.3, 1.38, rowT);
+        const n = Math.max(5, Math.round((TAU * HA * Math.cos(phi)) / 0.12));
+        for (let i = 0; i < n; i++) {
+          const lam = ((i + (j % 2) * 0.5) / n) * TAU + (rand() - 0.5) * 0.12;
+          const { P, N, Tl, Tm } = surface(phi + (rand() - 0.5) * 0.04, lam);
+          const len = lerp(0.15, 0.2, rand());
+          const hw = lerp(0.078, 0.095, rand());
+          const tone = 0.9 + 0.2 * rand();
+
+          const bract = buildGrid(2, 3, (fu, fv) => {
+            const u = fu * 2 - 1;
+            // Widest low down, drawing to a point at the tip.
+            const w = hw * Math.pow(Math.sin(Math.PI * Math.pow(fv, 0.65)), 0.75);
+            const out = 0.012
+              + len * (0.28 * fv + 0.3 * fv * fv)
+              + 0.016 * (1 - u * u) * Math.sin(Math.PI * Math.min(1, fv * 1.1))
+              - 0.016 * u * u * fv;
+            return P.clone()
+              .addScaledVector(Tm, len * fv * 0.88)
+              .addScaledVector(N, out)
+              .addScaledVector(Tl, u * w)
+              .toArray();
+          });
+          parts.push(paintUV(bract, (u, v) => {
+            let k = lerp(0.5, 1.0, smooth(0.05, 0.85, v)) * tone;
+            k *= 1 - 0.14 * u * u;
+            k += 0.2 * smooth(0.78, 1, v); // paler, papery tip
+            return [k, k, k];
+          }));
+        }
+      }
+      return mergeGeometries(parts).translate(0, HB, 0);
+    })();
+
+    // The tiny true flowers: slim yellow-orange trumpets that peek out between the bracts.
+    const floretGeo = (() => {
+      const parts = [];
+      const H = 0.17;
+      for (const [phi, n, phase] of [[-0.2, 12, 0.5], [0.3, 10, 0.2], [0.78, 6, 0.6]]) {
+        for (let i = 0; i < n; i++) {
+          const lam = ((i + phase) / n) * TAU + (rand() - 0.5) * 0.15;
+          const { P, N, Tm } = surface(phi + (rand() - 0.5) * 0.08, lam);
+          const dir = N.clone().multiplyScalar(0.85).addScaledVector(Tm, 0.3).normalize();
+          const f = new THREE.CylinderGeometry(0.022, 0.007, H, 5, 1, true);
+          f.translate(0, H / 2, 0);
+          paintY(f, (y) => {
+            const t = clamp(y / H, 0, 1);
+            return [lerp(0.9, 1.0, t), lerp(0.76, 0.56, t), lerp(0.28, 0.06, t)];
+          });
+          f.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir));
+          f.translate(P.x * 0.95, P.y * 0.95, P.z * 0.95);
+          parts.push(f);
+        }
+      }
+      return mergeGeometries(parts).translate(0, HB, 0);
+    })();
+
+    // --- 5. LEAVES: opposite, ovate-lance, soft silvery green with fine veins ---
+    const leafGeo = buildGrid(4, 8, (fu, fv) => {
+      const u = fu * 2 - 1;
+      const w = 0.17 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(fv, 0.7))), 0.8);
+      return [-u * w, fv, -0.12 * fv * fv + Math.abs(u) * w * 0.35];
+    });
+    paintUV(leafGeo, (u, v) => {
+      const k = Math.abs(u);
+      const midrib = clamp(1 - k / 0.14, 0, 1) * 0.14;
+      const vein = 0.05 * Math.pow(Math.max(0, Math.sin(v * 22 - k * 7)), 6) * (1 - k);
+      const edge = smooth(0.6, 1, k) * 0.05; // silvery fuzz at the margin
+      const base = lerp(0, 0.04, v);
+      return [
+        lerp(0.28, 0.5, k) + midrib + vein + edge + base,
+        lerp(0.5, 0.68, k) + midrib + vein + edge + base,
+        lerp(0.26, 0.46, k) + midrib + vein + edge
+      ];
+    });
+
+    // Small swollen stem node.
+    const nodeGeo = paintSolid(new THREE.SphereGeometry(0.032, 6, 5), 0.5, 0.3, 0.3);
+
+    // --- 6. MATERIALS ---
+    const headMat = new THREE.MeshPhysicalMaterial({
+      vertexColors: true, roughness: 0.42, sheen: 1, sheenRoughness: 0.4,
+      sheenColor: col('#ffd9ee'), side: THREE.DoubleSide, envMapIntensity: 0.65
+    });
+    const floretMat = new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.5, emissive: 0x6a3a00, emissiveIntensity: 0.3,
+      side: THREE.DoubleSide, envMapIntensity: 0.4
+    });
+    const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+
+    // --- 7. GROUND: a lawn of grass that fades into the haze ---
+    const groundY = (x, z) => 0.08 * Math.exp(-(x * x + z * z) / 16) + 0.02 * Math.sin(x * 1.5) * Math.cos(z * 1.3);
+    const fadeTex = radialTex([[0, '#fff'], [0.55, '#fff'], [0.95, '#000']]);
+
+    const groundGeo = new THREE.PlaneGeometry(18, 18, 48, 48);
+    groundGeo.rotateX(-Math.PI / 2);
+    {
+      const p = groundGeo.attributes.position;
+      const colors = [];
+      for (let i = 0; i < p.count; i++) {
+        p.setY(i, groundY(p.getX(i), p.getZ(i)));
+        const n = 0.5 + 0.5 * Math.sin(p.getX(i) * 2.4 + Math.cos(p.getZ(i) * 1.9) * 2);
+        const m = 0.5 + 0.5 * Math.sin(p.getX(i) * 6.1 - p.getZ(i) * 4.7);
+        colors.push(lerp(0.08, 0.15, n) + 0.02 * m, lerp(0.22, 0.34, n) + 0.04 * m, lerp(0.05, 0.09, n));
+      }
+      groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      groundGeo.computeVertexNormals();
+    }
+    scene.add(new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 1, alphaMap: fadeTex, transparent: true, envMapIntensity: 0.2
+    })));
+
+    // Grass: tapered, curved blades, dark at the root and sunlit at the tip, swaying in a vertex shader.
+    const bladeGeo = paintUV(buildGrid(1, 5, (fu, fv) => [(fu * 2 - 1) * 0.04 * Math.pow(1 - fv, 0.9), fv, 0.3 * fv * fv]),
+      (u, v) => [lerp(0.3, 0.95, v), lerp(0.42, 1, v), lerp(0.22, 0.7, v)]);
+    const grassUniforms = { uTime: { value: 0 } };
+    const grassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide, envMapIntensity: 0.3 });
+    grassMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = grassUniforms.uTime;
+      shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        float sw = position.y * position.y;
+        vec3 ip = vec3(instanceMatrix[3][0], 0.0, instanceMatrix[3][2]);
+        transformed.x += sin(uTime * 1.5 + ip.x * 0.7 + ip.z * 0.5) * 0.1 * sw;
+        transformed.z += cos(uTime * 1.1 + ip.x * 0.5) * 0.05 * sw;
+      `);
+    };
+
+    const GRASS = 1500;
+    const grass = new THREE.InstancedMesh(bladeGeo, grassMat, GRASS);
+    grass.frustumCulled = false;
+    {
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const greens = ['#4f8a36', '#6fa244', '#8fb84a', '#5a9a40', '#a3b84a'];
+      for (let i = 0; i < GRASS; i++) {
+        const a = rand() * TAU;
+        const d = Math.sqrt(rand()) * 7;
+        const x = Math.cos(a) * d;
+        const z = Math.sin(a) * d * 0.85;
+        const h = lerp(0.22, 0.75, rand()) * (1 - smooth(4, 7, d) * 0.8);
+        const w = lerp(0.8, 1.4, rand());
+        q.setFromAxisAngle(Y_AXIS, rand() * TAU);
+        m.compose(V3(x, groundY(x, z), z), q, V3(w, h, w));
+        grass.setMatrixAt(i, m);
+        grass.setColorAt(i, col(greens[i % greens.length]));
+      }
+    }
+    scene.add(grass);
+
+    // --- 8. THE PLANTS ---
+    // Each plant forks in pairs, ends every branch in a cluster of three heads (centre head larger), and carries opposite
+    // pairs of leaves, with a little pair cradling each head. Stems and leaves merge into one mesh; heads are instanced.
+    const PALETTES = {
+      magenta: ['#c4168c', '#d12a9a', '#b0127f', '#d8309f'],
+      pink:    ['#ff6fae', '#ff8fc0', '#f25a9d', '#ffb0d0'],
+      white:   ['#fffaf2', '#ffffff', '#ece0f8', '#dcc6f4'],
+      red:     ['#e0302c', '#f04a3a', '#d02530', '#e8503a'],
+      purple:  ['#9a5fd0', '#a875dc', '#8a4cc4', '#b78ae0'],
+      orange:  ['#ff7a2a', '#ff9040', '#f2641e', '#ffa24f']
+    };
+    const plants = [];
+    const tmpM = new THREE.Matrix4();
+    const tmpV = new THREE.Vector3();
+    const tmpQ = new THREE.Quaternion();
+    const yawQ = new THREE.Quaternion();
+
+    function rotatedAround(dir, angle) {
+      const a = rand() * TAU;
+      const axis = V3(Math.cos(a), 0, Math.sin(a)).cross(dir);
+      if (axis.lengthSq() < 1e-4) axis.set(1, 0, 0);
+      return dir.clone().applyAxisAngle(axis.normalize(), angle).add(V3(0, 0.12, 0)).normalize();
+    }
+
+    const shadowGeo = new THREE.PlaneGeometry(2.4, 2.4).rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      map: radialTex([[0, 'rgba(40,20,10,0.6)'], [1, 'rgba(40,20,10,0)']]),
+      transparent: true, depthWrite: false, opacity: 0.55,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    });
+
+    function makePlant({ x, z, scale, delay, palette }) {
+      const group = new THREE.Group();
+      group.position.set(x, groundY(x, z) - 0.02, z);
+      group.scale.setScalar(0.01);
+      scene.add(group);
+
+      // Soft contact shadow that grows with the plant.
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.position.set(x, groundY(x, z) + 0.04, z);
+      shadow.scale.setScalar(0.01);
+      scene.add(shadow);
+
+      const parts = [];
+      const heads = [];
+
+      // Opposite pair of leaves at a node.
+      function leafPair(pos, tangent, size, clasp) {
+        const a = rand() * TAU;
+        for (const sgn of [1, -1]) {
+          const h = V3(Math.cos(a) * sgn, 0, Math.sin(a) * sgn);
+          const side = h.addScaledVector(tangent, -h.dot(tangent)).normalize();
+          const dir = tangent.clone().multiplyScalar(clasp ? 0.8 : 0.5).addScaledVector(side, clasp ? 0.35 : 0.85).add(V3(0, 0.15, 0)).normalize();
+          const leaf = leafGeo.clone()
+            .scale(size * 0.7, size * 0.8, size * 0.7)
+            .applyQuaternion(basisQuat(dir, UP))
+            .translate(pos.x, pos.y, pos.z);
+          parts.push(leaf);
+        }
+      }
+
+      function addHead(base, dir, size, leafSize) {
+        const tint = col(palette[Math.floor(rand() * palette.length)]).offsetHSL((rand() - 0.5) * 0.02, 0, (rand() - 0.5) * 0.06);
+        const quat = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir)
+          .multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, rand() * TAU)); // random spin so no two heads match
+        heads.push({ pos: base, quat, size: size * lerp(0.92, 1.06, rand()), tint });
+        leafPair(base.clone().addScaledVector(dir, -0.02), dir, leafSize, true);
+      }
+
+      function grow(P, dir, len, level) {
+        const side = V3(rand() - 0.5, 0, rand() - 0.5).normalize();
+        const end = P.clone().addScaledVector(dir, len);
+        const mid = P.clone().addScaledVector(dir, len * 0.5).addScaledVector(side, len * 0.08 * (rand() - 0.5) * 2);
+        const curve = new THREE.CatmullRomCurve3([P, mid, end]);
+        parts.push(makeTube(curve, lerp(0.034, 0.014, level / 2), lerp(0.028, 0.011, level / 2), '#5f8f4a', '#8c6a52', 10, 5));
+        const tan = curve.getTangent(1);
+        leafPair(curve.getPoint(0.65), curve.getTangent(0.65), lerp(1.0, 0.7, level / 2), false);
+
+        if (level < 2) {
+          parts.push(nodeGeo.clone().translate(end.x, end.y, end.z));
+          const kids = level === 0 ? 3 : 2;
+          for (let k = 0; k < kids; k++) {
+            const d = k === 0 && level === 0 ? tan.clone().add(V3(rand() * 0.2 - 0.1, 0, rand() * 0.2 - 0.1)).normalize() : rotatedAround(tan, (k % 2 ? 1 : -1) * (0.5 + rand() * 0.25));
+            grow(end, d, len * (level === 0 ? 0.95 : 0.78), level + 1);
+          }
+          return;
+        }
+
+        // Cluster of three heads: one on top, two on short stalks just below.
+        addHead(end, tan, 1.1, 0.62);
+        for (const sgn of [1, -1]) {
+          const sd = rotatedAround(tan, sgn * (0.75 + rand() * 0.2));
+          const from = end.clone().addScaledVector(tan, -0.12);
+          const to = from.clone().addScaledVector(sd, 0.24);
+          parts.push(makeTube(new THREE.CatmullRomCurve3([from, from.clone().lerp(to, 0.5).add(V3(0, 0.03, 0)), to]), 0.012, 0.01, '#6f8f52', '#a07666', 6, 4));
+          addHead(to, sd.clone().lerp(tan, 0.45).normalize(), 0.88, 0.45);
+        }
+      }
+
+      grow(V3(0, 0, 0), V3((rand() - 0.5) * 0.15, 1, (rand() - 0.5) * 0.15).normalize(), 0.95, 0);
+      group.add(new THREE.Mesh(mergeGeometries(parts), plantMat));
+
+      const headMesh = new THREE.InstancedMesh(headGeo, headMat, heads.length);
+      const floretMesh = new THREE.InstancedMesh(floretGeo, floretMat, heads.length);
+      for (const m of [headMesh, floretMesh]) { m.frustumCulled = false; group.add(m); }
+      heads.forEach((h, i) => { headMesh.setColorAt(i, h.tint); h.i = i; h.t0 = delay + 0.9 + i * 0.06; });
+
+      plants.push({ group, shadow, heads, headMesh, floretMesh, scale, delay, done: false, end: delay + 0.9 + heads.length * 0.06 + 1, phase: x * 1.7 + z });
+    }
+
+    makePlant({ x: 0,    z: -0.3, scale: 1.15, delay: 0.0, palette: PALETTES.magenta });
+    makePlant({ x: -2.0, z: 0.2,  scale: 1.0,  delay: 0.5, palette: PALETTES.pink });
+    makePlant({ x: 2.0,  z: 0.3,  scale: 1.0,  delay: 0.9, palette: PALETTES.white });
+    makePlant({ x: 0.2,  z: 1.3,  scale: 0.62, delay: 1.3, palette: PALETTES.red });
+    makePlant({ x: -1.0, z: 1.1,  scale: 0.55, delay: 1.7, palette: PALETTES.magenta });
+    makePlant({ x: 1.3,  z: 1.2,  scale: 0.58, delay: 2.1, palette: PALETTES.purple });
+    makePlant({ x: -2.7, z: 1.0,  scale: 0.5,  delay: 2.5, palette: PALETTES.orange });
+
+    // --- 9. DRIFTING GOLDEN POLLEN BOKEH ---
+    const bokehTex = radialTex([[0, 'rgba(255,240,200,0.95)'], [0.6, 'rgba(255,230,180,0.35)'], [1, 'rgba(255,230,180,0)']]);
+    const MOTES = 26;
+    const moteHome = new Float32Array(MOTES * 3);
+    const motePhase = new Float32Array(MOTES);
+    for (let i = 0; i < MOTES; i++) {
+      const a = (i * 2.399) % TAU;
+      const d = 1.2 + ((i * 0.618) % 1) * 4.5;
+      moteHome[i * 3] = Math.cos(a) * d;
+      moteHome[i * 3 + 1] = 0.6 + ((i * 0.37) % 1) * 3.2;
+      moteHome[i * 3 + 2] = Math.sin(a) * d * 0.5 - 0.5;
+      motePhase[i] = i * 1.3;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(moteHome), 3));
+    scene.add(new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.3, map: bokehTex, color: 0xffe9b8, transparent: true, opacity: 0.5, depthWrite: false })));
+
+    // --- 10. ANIMATION: each plant springs up, then its heads pop open one by one; everything sways gently ---
+    const clock = new THREE.Clock();
+    let time = reduceMotion ? 100 : 0; // skip the intro for people who prefer reduced motion
+    let slowFrames = 0;
+    let firstFrame = true;
+
+    function updateIntro(pl) {
+      const s = Math.max(pl.scale * easeOutCubic((time - pl.delay) / 1.6), 0.01);
+      pl.group.scale.setScalar(s);
+      pl.shadow.scale.setScalar(s);
+      for (const h of pl.heads) {
+        const hs = h.size * easeOutBack((time - h.t0) / 0.7);
+        tmpM.compose(h.pos, h.quat, tmpV.setScalar(Math.max(hs, 0.0001)));
+        pl.headMesh.setMatrixAt(h.i, tmpM);
+        pl.floretMesh.setMatrixAt(h.i, tmpM);
+      }
+      pl.headMesh.instanceMatrix.needsUpdate = true;
+      pl.floretMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const rawDt = clock.getDelta();
+      if (!reduceMotion) time += Math.min(rawDt, 0.05);
+
+      // Quality governor: if frames stay slow, step the pixel ratio down (never below 1).
+      slowFrames = rawDt > 0.034 && rawDt < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+      if (slowFrames > 45 && pixelRatio > 1) {
+        pixelRatio = Math.max(1, pixelRatio - 0.25);
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        slowFrames = 0;
+      }
+
+      grassUniforms.uTime.value = reduceMotion ? 0 : time;
+
+      for (const pl of plants) {
+        if (!pl.done) {
+          updateIntro(pl);
+          if (time > pl.end) pl.done = true;
+        }
+        const sway = reduceMotion ? 0 : 1;
+        pl.group.rotation.z = Math.sin(time * 0.8 + pl.phase) * 0.016 * sway;
+        pl.group.rotation.x = Math.cos(time * 0.6 + pl.phase) * 0.012 * sway;
+      }
+
+      const mp = moteGeo.attributes.position;
+      for (let i = 0; i < MOTES; i++) {
+        const ph = motePhase[i];
+        mp.setXYZ(i,
+          moteHome[i * 3] + Math.sin(time * 0.3 + ph) * 0.5,
+          moteHome[i * 3 + 1] + Math.sin(time * 0.5 + ph * 1.3) * 0.3,
+          moteHome[i * 3 + 2] + Math.cos(time * 0.28 + ph) * 0.4);
+      }
+      mp.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      if (firstFrame) {
+        firstFrame = false;
+        window.__flowerReady = true;
+        document.getElementById('status').classList.add('hide');
+        setTimeout(() => document.getElementById('caption').classList.add('hide'), 7000);
+      }
+    }
+
+    function onResize() {
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      frame();
+    }
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+
+    animate();
+  </script>
+</body>
+</html>

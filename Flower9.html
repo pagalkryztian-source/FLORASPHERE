@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Rose</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+      cursor: pointer;
+    }
+    .nav-arrow:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.4); color: #fff; }
+    .nav-arrow:active { transform: translateY(-50%) scale(0.94); }
+    .nav-arrow.prev { left: 12px; }
+    .nav-arrow.next { right: 12px; }
+
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+    .send-btn:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+    .send-btn:active { transform: scale(0.96); }
+    .send-btn.copied {
+      color: #ffd2da;
+      border-color: rgba(255, 150, 170, 0.55);
+      background: rgba(220, 40, 70, 0.2);
+    }
+
+    .status {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+    }
+    .status.hide { opacity: 0; }
+
+    @media (max-width: 600px) {
+      .nav-arrow { width: 32px; height: 46px; font-size: 18px; border-radius: 10px; }
+      .nav-arrow.prev { left: 8px; }
+      .nav-arrow.next { right: 8px; }
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower8.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower10.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower9.html">Send to someone</button>
+  <div class="status" id="status">Growing the rose…</div>
+  <noscript><div class="status">This page needs JavaScript and WebGL.</div></noscript>
+
+  <script>
+    (function setupLinkCopy() {
+      const btn = document.getElementById('sendToSomeoneBtn');
+      if (!btn) return;
+      let resetTimer = null;
+
+      function getFlowerFileUrl() {
+        const targetFile = btn.getAttribute('data-target-file') || 'Flower9.html';
+        try {
+          const currentUrl = new URL(window.location.href);
+          const pathParts = currentUrl.pathname.split('/');
+          if (pathParts[pathParts.length - 1] && pathParts[pathParts.length - 1].includes('.')) {
+            pathParts[pathParts.length - 1] = targetFile;
+          } else {
+            if (!currentUrl.pathname.endsWith('/')) pathParts.push('');
+            pathParts.push(targetFile);
+          }
+          currentUrl.pathname = pathParts.join('/').replace(/\/{2,}/g, '/');
+          return currentUrl.toString();
+        } catch (e) {
+          return targetFile;
+        }
+      }
+
+      async function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (err) { /* fall through to the fallback */ }
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        let copied = false;
+        try { copied = document.execCommand('copy'); } catch (err) { copied = false; }
+        document.body.removeChild(ta);
+        return copied;
+      }
+
+      btn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const urlToCopy = getFlowerFileUrl();
+        const success = await copyTextToClipboard(urlToCopy);
+        btn.textContent = success ? 'Link copied' : urlToCopy;
+        btn.classList.add('copied');
+        if (resetTimer) clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => {
+          btn.textContent = 'Send to someone';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    })();
+
+    // If the 3D library never loads (offline, blocked CDN), say so instead of showing a blank page.
+    setTimeout(() => {
+      if (!window.__flowerReady) {
+        document.getElementById('status').textContent =
+          'Could not load the 3D library. Check your connection and reload.';
+      }
+    }, 9000);
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Y_AXIS = V3(0, 1, 0);
+    const Z_AXIS = V3(0, 0, 1);
+    const UP = V3(0, 1, 0);
+    const TAU = Math.PI * 2;
+    const GOLDEN = 2.399963; // golden angle in radians
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const col = (hex) => new THREE.Color(hex);
+    const easeOutCubic = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Seeded random: the rose is identical on every load.
+    const rand = (() => {
+      let s = 9090909;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    // --- 1. SCENE, CAMERA, RENDERER (plain render, no bloom or glow) ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    } catch (err) {
+      document.getElementById('status').textContent = 'Your browser could not start WebGL, so the 3D rose cannot be shown.';
+      throw err;
+    }
+    let pixelRatio = Math.min(window.devicePixelRatio, 2);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(pixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.appendChild(renderer.domElement);
+
+    {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environmentIntensity = 0.55;
+      pmrem.dispose();
+    }
+
+    // Same framing idea as the reference: pull the camera back on narrower screens.
+    function updateCameraFraming() {
+      const aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = aspect;
+      if (aspect < 0.75) {
+        camera.position.set(0, 3.3, 12.2);
+      } else if (aspect < 1.1) {
+        camera.position.set(0, 3.1, 10.0);
+      } else {
+        camera.position.set(0, 2.9, 8.8);
+      }
+      camera.updateProjectionMatrix();
+    }
+    updateCameraFraming();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.rotateSpeed = 0.75;
+    controls.zoomSpeed = 0.85;
+    controls.panSpeed = 0.75;
+    controls.minDistance = 2.0;
+    controls.maxDistance = 17;
+    controls.maxPolarAngle = Math.PI * 0.88;
+    controls.target.set(0, 0.15, 0);
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+    // --- 2. LIGHTING: a clean studio setup for a dark stage (no glow lights) ---
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const keyLight = new THREE.DirectionalLight(0xfff0e0, 2.6);
+    keyLight.position.set(-4, 7, 6);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0xcfd8ff, 1.5);
+    rimLight.position.set(5, 4, -6);
+    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0xffe6e0, 0.7);
+    fillLight.position.set(5, 1, 5);
+    scene.add(fillLight);
+
+    // --- 3. GEOMETRY HELPERS ---
+    // Grid surface. fn(fu, fv) takes fractions 0..1 and returns [x, y, z]; uv = (fu, fv).
+    function buildGrid(nu, nv, fn) {
+      const pos = [];
+      const uv = [];
+      const index = [];
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          const p = fn(i / nu, j / nv);
+          pos.push(p[0], p[1], p[2]);
+          uv.push(i / nu, j / nv);
+        }
+      }
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i;
+          index.push(a, a + nu + 1, a + 1, a + 1, a + nu + 1, a + nu + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Vertex colors from (u -1..1, v 0..1); uv is dropped so pieces can merge.
+    function paintUV(geo, fn) {
+      const uv = geo.attributes.uv;
+      const colors = [];
+      for (let i = 0; i < uv.count; i++) colors.push(...fn(uv.getX(i) * 2 - 1, uv.getY(i)));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    function paintSolid(geo, r, g, b) {
+      const colors = [];
+      for (let i = 0; i < geo.attributes.position.count; i++) colors.push(r, g, b);
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    // Orientation whose local +Y is `dir` and whose local +Z leans toward `ref`.
+    function basisQuat(dir, ref) {
+      const y = dir.clone().normalize();
+      let z = ref.clone().addScaledVector(y, -ref.dot(y));
+      if (z.lengthSq() < 1e-6) z = V3(0, 0, 1).addScaledVector(y, -y.z);
+      z.normalize();
+      const x = new THREE.Vector3().crossVectors(y, z);
+      return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    }
+
+    // Tube with a vertex-color gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 10, rad = 5) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = col(c0);
+      const to = col(c1);
+      const c = new THREE.Color();
+      const pos = [];
+      const nor = [];
+      const colors = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        c.lerpColors(from, to, t);
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * TAU;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(c.r, c.g, c.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    // --- 4. THE ROSE BLOOM ---
+    // Petals are wrapped around the flower's axis in cylindrical coordinates and laid down around the golden angle.
+    // Each petal's centerline leans outward at its base, tucks back in through the middle to make a rounded cup, and
+    // inner petals close over the top into a tight spiral heart while outer petals roll their rims back.
+    const R_DARK = col('#3a0210');
+    const R_MID = col('#a30d28');
+    const R_RIM = col('#df3550');
+    const tc = new THREE.Color();
+
+    function petalColor(u, v, f, tone) {
+      const k = Math.abs(u);
+      if (v < 0.45) tc.lerpColors(R_DARK, R_MID, smooth(0, 0.45, v));
+      else tc.lerpColors(R_MID, R_RIM, smooth(0.45, 1, v) * 0.5 + smooth(0.6, 1, k) * 0.25 * smooth(0.4, 1, v));
+      // Soft ambient occlusion: the heart and the base of each petal sit in shadow.
+      const ao = lerp(0.5, 1.0, Math.pow(f, 0.6)) * (0.6 + 0.4 * smooth(0, 0.5, v)) * tone;
+      const streak = 1 + 0.05 * Math.sin(u * 16 + v * 3) * smooth(0.1, 0.6, v);
+      return [tc.r * ao * streak, tc.g * ao * streak, tc.b * ao * streak];
+    }
+
+    // Parameters for one petal, drawn once so the closed and open versions of the bloom stay in step.
+    function petalParams(f, phi) {
+      return {
+        f, phi,
+        lean0: lerp(0.15, 0.8, smooth(0, 1, f)) + (rand() - 0.5) * 0.05,
+        close: lerp(1.15, 0, smooth(0, 0.55, f)),
+        flare: lerp(0, 1.5, smooth(0.35, 1, f)) + (rand() - 0.5) * 0.1,
+        len: lerp(0.56, 0.64, Math.pow(f, 0.6)) * lerp(0.96, 1.04, rand()),
+        rho0: lerp(0.04, 0.11, f),
+        y0: lerp(0, -0.05, f),
+        Th: lerp(1.05, 0.85, f),
+        tone: lerp(0.9, 1.1, rand())
+      };
+    }
+
+    // open: 0 = tight bud, 1 = fully open. Same vertex layout either way so the two can be morphed.
+    function makePetal(p, open) {
+      const { f, phi } = p;
+      const lean0 = lerp(0.05 + 0.1 * f, p.lean0, open);
+      const close = lerp(1.2, p.close, open);
+      const flare = p.flare * open;
+      const tilt = (v) => lean0 * (1 - 1.7 * v) - close * smooth(0.45, 1, v) + flare * smooth(0.72, 1, v);
+      const geo = buildGrid(10, 16, (fu, fv) => {
+        const u = fu * 2 - 1;
+        const v = fv;
+        let rho = p.rho0;
+        let y = p.y0;
+        const steps = 10;
+        const dv = v / steps;
+        for (let s = 0; s < steps; s++) {
+          const t = tilt((s + 0.5) * dv);
+          rho += Math.sin(t) * p.len * dv;
+          y += Math.cos(t) * p.len * dv;
+        }
+        rho = Math.max(rho, 0.012);
+        rho += 0.1 * f * smooth(0, 0.35, v) * open;                 // keeps neighbouring layers from touching
+        const base = 0.32 + 0.68 * smooth(0, 0.5, v);               // narrow at the base, broad above
+        const top = v > 0.62 ? Math.sqrt(Math.max(0, 1 - Math.pow((v - 0.62) / 0.38, 2.6))) : 1; // rounded top edge
+        const ang = phi + u * p.Th * base * top;
+        const rim = smooth(0.5, 1, v);
+        const r = rho + 0.05 * smooth(0.45, 1, f) * rim * (0.3 + u * u) * open;
+        const yy = y + 0.018 * f * Math.sin(u * 3.2 + phi * 5) * rim * open; // gentle ruffle
+        return [r * Math.cos(ang), yy, r * Math.sin(ang)];
+      });
+      return paintUV(geo, (u, v) => petalColor(u, v, f, p.tone));
+    }
+
+    const PETALS = 40;
+    const petalSet = [];
+    for (let k = 0; k < PETALS; k++) petalSet.push(petalParams((k + 0.5) / PETALS, k * GOLDEN + (rand() - 0.5) * 0.1));
+
+    // The bloom is built twice (closed and open) and morphed between them for the opening animation.
+    const petalGeo = (() => {
+      const closed = mergeGeometries(petalSet.map((p) => makePetal(p, 0)));
+      const opened = mergeGeometries(petalSet.map((p) => makePetal(p, 1)));
+      closed.morphAttributes.position = [opened.attributes.position];
+      closed.morphAttributes.normal = [opened.attributes.normal];
+      closed.morphTargetsRelative = false;
+      return closed;
+    })();
+
+    // A small bud for the side shoot: just the tight inner petals, slightly parted.
+    const budGeo = (() => {
+      const parts = [];
+      const N = 15;
+      for (let k = 0; k < N; k++) {
+        const f = ((k + 0.5) / N) * 0.46;
+        parts.push(makePetal(petalParams(f, k * GOLDEN + (rand() - 0.5) * 0.1), 0.35 + 0.4 * (k / N)));
+      }
+      return mergeGeometries(parts);
+    })();
+
+    // Calyx: a slim green hip that tapers into the stem, with five sepals. `open` curls the sepals up (bud) or back (bloom).
+    const G_DARK = col('#2b5a22');
+    const G_LIGHT = col('#74a84e');
+    const G_TIP = col('#8a5a3a');
+
+    function sepalParams() {
+      const list = [];
+      for (let i = 0; i < 5; i++) {
+        list.push({ phi: (i / 5) * TAU + 0.3 + (rand() - 0.5) * 0.2, len: lerp(0.9, 1.1, rand()), j0: (rand() - 0.5) * 0.2, j1: (rand() - 0.5) * 0.2 });
+      }
+      return list;
+    }
+
+    function makeCalyx(params, open, size) {
+      const parts = [];
+      const hip = new THREE.LatheGeometry([
+        new THREE.Vector2(0.02, -0.42),
+        new THREE.Vector2(0.04, -0.3),
+        new THREE.Vector2(0.075, -0.19),
+        new THREE.Vector2(0.1, -0.1),
+        new THREE.Vector2(0.09, -0.03),
+        new THREE.Vector2(0.05, 0.0),
+        new THREE.Vector2(0.0, 0.01)
+      ], 12);
+      parts.push(paintSolid(hip, 0.12, 0.3, 0.08));
+
+      for (const sp of params) {
+        const len = 0.42 * sp.len;
+        const t0 = lerp(0.3, 1.15, open) + sp.j0;
+        const t1 = lerp(0.75, 2.45, open) + sp.j1;
+        const geo = buildGrid(3, 12, (fu, fv) => {
+          const u = fu * 2 - 1;
+          const v = fv;
+          let rho = 0.1;
+          let y = -0.1;
+          const steps = 8;
+          const dv = v / steps;
+          for (let s = 0; s < steps; s++) {
+            const vv = (s + 0.5) * dv;
+            const t = t0 + (t1 - t0) * Math.pow(vv, 1.3);
+            rho += Math.sin(t) * len * dv;
+            y += Math.cos(t) * len * dv;
+          }
+          const th = 0.3 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(v, 0.5))), 0.8);
+          const ang = sp.phi + u * th;
+          const r = rho + 0.012 * u * u;
+          return [r * Math.cos(ang), y + 0.02 * u * u, r * Math.sin(ang)];
+        });
+        parts.push(paintUV(geo, (u, v) => {
+          tc.lerpColors(G_DARK, G_LIGHT, smooth(0, 0.7, v) * 0.8 + Math.abs(u) * 0.2);
+          tc.lerp(G_TIP, smooth(0.8, 1, v) * 0.5);
+          return [tc.r, tc.g, tc.b];
+        }));
+      }
+      const merged = mergeGeometries(parts);
+      merged.scale(size, size, size);
+      return merged;
+    }
+
+    const bloomSepals = sepalParams();
+    const calyxGeo = (() => {
+      const closed = makeCalyx(bloomSepals, 0, 1);
+      const opened = makeCalyx(bloomSepals, 1, 1);
+      closed.morphAttributes.position = [opened.attributes.position];
+      closed.morphAttributes.normal = [opened.attributes.normal];
+      closed.morphTargetsRelative = false;
+      return closed;
+    })();
+    const budCalyxGeo = makeCalyx(sepalParams(), 0.3, 0.8);
+
+    // --- 5. LEAVES: glossy, serrated, reddish at the margin ---
+    const L_DEEP = col('#1c4a1f');
+    const L_LIGHT = col('#4d8d38');
+    const L_RIB = col('#9cc47a');
+    const L_EDGE = col('#7a3a34');
+
+    // One leaflet of unit length: ovate, pointed tip, finely toothed edge. +Y is the tip, +Z is the upper face.
+    const leafletGeo = (() => {
+      const geo = buildGrid(4, 30, (fu, fv) => {
+        const u = fu * 2 - 1;
+        const v = fv;
+        const prof = Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(v, 0.78))), 0.8);
+        const saw = (v * 10) % 1;
+        const w = 0.27 * prof * (1 - 0.1 * saw * smooth(0.04, 0.9, v));
+        return [u * w, v, -0.1 * v * v + Math.abs(u) * w * 0.45];
+      });
+      return paintUV(geo, (u, v) => {
+        const k = Math.abs(u);
+        tc.lerpColors(L_DEEP, L_LIGHT, clamp(k * 0.7 + v * 0.2, 0, 1));
+        tc.lerp(L_RIB, clamp(1 - k / 0.1, 0, 1) * 0.6);
+        const vein = Math.pow(Math.max(0, Math.sin(v * 30 - k * 9)), 8) * 0.4 * (1 - k);
+        tc.lerp(L_RIB, vein * 0.35);
+        tc.lerp(L_EDGE, smooth(0.85, 1, k) * 0.45);
+        return [tc.r, tc.g, tc.b];
+      });
+    })();
+
+    // --- 6. MATERIALS ---
+    const roseMat = new THREE.MeshPhysicalMaterial({
+      vertexColors: true, roughness: 0.55, sheen: 0.7, sheenRoughness: 0.45,
+      sheenColor: col('#c0455a'), side: THREE.DoubleSide, envMapIntensity: 0.8
+    });
+    const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, side: THREE.DoubleSide, envMapIntensity: 0.8 });
+
+    // --- 7. THE FLOATING STEM, THORNS AND LEAVES ---
+    const sceneRoot = new THREE.Group();
+    scene.add(sceneRoot);
+
+    // The last stretch of the stem runs straight along the bloom's own axis (already nodding toward the viewer),
+    // so the stem enters the green base head-on instead of the bloom floating off to one side.
+    const stemCurve = new THREE.CatmullRomCurve3([
+      V3(0.04, -2.35, -0.03),
+      V3(-0.07, -1.0, 0.05),
+      V3(0.06, 0.2, -0.02),
+      V3(0.03, 0.8, -0.03),
+      V3(0.02, 1.21, -0.01),
+      V3(0.02, 1.62, 0.28)
+    ]);
+
+    const stemParts = [];
+    stemParts.push(makeTube(stemCurve, 0.05, 0.03, '#44703a', '#6e7a3e', 48, 8));
+
+    // Clean-cut flat end at the bottom of the stem.
+    {
+      const cap = new THREE.CircleGeometry(0.05, 10);
+      cap.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Z_AXIS, stemCurve.getTangentAt(0).clone().negate()));
+      const p0 = stemCurve.getPointAt(0);
+      cap.translate(p0.x, p0.y, p0.z);
+      stemParts.push(paintSolid(cap, 0.62, 0.7, 0.4));
+    }
+
+    // Thorns: small hooked cones that slant back toward the base.
+    for (let i = 0; i < 10; i++) {
+      const t = 0.06 + i * 0.08 + rand() * 0.02;
+      const P = stemCurve.getPointAt(t);
+      const tan = stemCurve.getTangentAt(t);
+      const a = i * 2.6 + rand();
+      const h = V3(Math.cos(a), 0, Math.sin(a));
+      const side = h.addScaledVector(tan, -h.dot(tan)).normalize();
+      const dir = side.clone().multiplyScalar(0.85).addScaledVector(tan, -0.35).normalize();
+      const rStem = lerp(0.05, 0.03, t);
+      const thorn = new THREE.ConeGeometry(0.03, 0.13, 5);
+      thorn.translate(0, 0.065, 0);
+      paintSolid(thorn, 0.3, 0.07, 0.04);
+      thorn.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir));
+      thorn.translate(P.x + side.x * rStem * 0.7, P.y + side.y * rStem * 0.7, P.z + side.z * rStem * 0.7);
+      stemParts.push(thorn);
+    }
+
+    // Compound leaves: a curved rachis carrying two pairs of side leaflets and one terminal leaflet.
+    function addLeaflet(pos, dir, L) {
+      stemParts.push(leafletGeo.clone()
+        .scale(L, L, L)
+        .applyQuaternion(basisQuat(dir, UP))
+        .translate(pos.x, pos.y, pos.z));
+    }
+
+    function addLeaf(stemT, az, s) {
+      const P = stemCurve.getPointAt(stemT);
+      const h = V3(Math.cos(az), 0, Math.sin(az));
+      const base = P.clone().addScaledVector(h, 0.03);
+      const rachis = new THREE.CatmullRomCurve3([
+        base,
+        base.clone().addScaledVector(h, 0.28 * s).add(V3(0, 0.16 * s, 0)),
+        base.clone().addScaledVector(h, 0.6 * s).add(V3(0, 0.17 * s, 0)),
+        base.clone().addScaledVector(h, 0.92 * s).add(V3(0, 0.05 * s, 0))
+      ]);
+      stemParts.push(makeTube(rachis, 0.016, 0.007, '#4a7a36', '#7a8a46', 10, 5));
+
+      for (const [t, L] of [[0.5, 0.4 * s], [0.76, 0.52 * s]]) {
+        const pos = rachis.getPointAt(t);
+        const tan = rachis.getTangentAt(t);
+        const side = new THREE.Vector3().crossVectors(tan, UP).normalize();
+        for (const sgn of [1, -1]) {
+          const dir = tan.clone().multiplyScalar(0.5).addScaledVector(side, sgn * 0.85).addScaledVector(UP, 0.12).normalize();
+          addLeaflet(pos, dir, L);
+        }
+      }
+      addLeaflet(rachis.getPointAt(1), rachis.getTangentAt(1), 0.62 * s);
+    }
+
+    const LEAF_T = [0.12, 0.26, 0.4, 0.54, 0.7, 0.84];
+    LEAF_T.forEach((t, i) => addLeaf(t, i * 2.4 + 0.6 + (i === 4 ? 0.8 : 0), lerp(1.0, 0.68, i / (LEAF_T.length - 1))));
+
+    // A side shoot reaching out and up to carry a small bud.
+    const shootStart = stemCurve.getPointAt(0.62);
+    const shootCurve = new THREE.CatmullRomCurve3([
+      shootStart.clone(),
+      shootStart.clone().add(V3(0.12, 0.2, 0.02)),
+      shootStart.clone().add(V3(0.4, 0.42, 0.05)),
+      shootStart.clone().add(V3(0.68, 0.7, 0.08)),
+      shootStart.clone().add(V3(0.82, 0.95, 0.09)),
+      shootStart.clone().add(V3(0.88, 1.22, 0.1))
+    ]);
+    stemParts.push(makeTube(shootCurve, 0.026, 0.016, '#4f7a3a', '#6e7a3e', 24, 6));
+    {
+      const P = shootCurve.getPointAt(0.45);
+      const tan = shootCurve.getTangentAt(0.45);
+      const side = new THREE.Vector3().crossVectors(tan, V3(0, 0, 1)).normalize();
+      const dir = side.multiplyScalar(0.8).addScaledVector(tan, -0.3).normalize();
+      const thorn = new THREE.ConeGeometry(0.022, 0.1, 5);
+      thorn.translate(0, 0.05, 0);
+      paintSolid(thorn, 0.3, 0.07, 0.04);
+      thorn.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir));
+      thorn.translate(P.x, P.y, P.z);
+      stemParts.push(thorn);
+    }
+    // One small leaf where the shoot leaves the stem.
+    {
+      const P = shootCurve.getPointAt(0.3);
+      const tan = shootCurve.getTangentAt(0.3);
+      const side = new THREE.Vector3().crossVectors(tan, UP).normalize();
+      addLeaflet(P, tan.clone().multiplyScalar(0.5).addScaledVector(side, -0.85).addScaledVector(UP, 0.1).normalize(), 0.3);
+      addLeaflet(P, tan.clone().multiplyScalar(0.5).addScaledVector(side, 0.85).addScaledVector(UP, 0.1).normalize(), 0.3);
+    }
+
+    sceneRoot.add(new THREE.Mesh(mergeGeometries(stemParts), plantMat));
+
+    // --- 8. THE MAIN BLOOM AND THE BUD ---
+    const headPivot = new THREE.Group();
+    headPivot.position.copy(stemCurve.getPointAt(1));
+    headPivot.quaternion.setFromUnitVectors(Y_AXIS, stemCurve.getTangentAt(1)); // bloom axis = stem direction
+    sceneRoot.add(headPivot);
+
+    const bloom = new THREE.Group();
+    bloom.scale.setScalar(1.45);
+    headPivot.add(bloom);
+    const petalMesh = new THREE.Mesh(petalGeo, roseMat);
+    const calyxMesh = new THREE.Mesh(calyxGeo, plantMat);
+    bloom.add(petalMesh);
+    bloom.add(calyxMesh);
+
+    const budPivot = new THREE.Group();
+    budPivot.position.copy(shootCurve.getPointAt(1));
+    budPivot.quaternion.setFromUnitVectors(Y_AXIS, shootCurve.getTangentAt(1)); // bud axis = shoot direction
+    sceneRoot.add(budPivot);
+    const bud = new THREE.Group();
+    bud.scale.setScalar(0.75);
+    budPivot.add(bud);
+    bud.add(new THREE.Mesh(budGeo, roseMat));
+    bud.add(new THREE.Mesh(budCalyxGeo, plantMat));
+
+    // --- 9. FIREFLIES: drifting, softly blinking points of warm light (all motion runs on the GPU) ---
+    const FIREFLIES = 46;
+    const fireUniforms = {
+      uTime: { value: 0 },
+      uScale: { value: 600 },
+      uBlink: { value: reduceMotion ? 0 : 1 }
+    };
+    const fireGeo = new THREE.BufferGeometry();
+    {
+      const pos = new Float32Array(FIREFLIES * 3);
+      const rnd = new Float32Array(FIREFLIES * 4);
+      for (let i = 0; i < FIREFLIES; i++) {
+        const a = rand() * TAU;
+        const d = 1.0 + Math.sqrt(rand()) * 3.8;
+        pos[i * 3] = Math.cos(a) * d;
+        pos[i * 3 + 1] = lerp(-2.6, 3.4, rand());
+        pos[i * 3 + 2] = Math.sin(a) * d * 0.8 - 0.4;
+        rnd[i * 4] = rand();                       // phase
+        rnd[i * 4 + 1] = lerp(0.7, 1.4, rand());   // speed
+        rnd[i * 4 + 2] = lerp(0.22, 0.4, rand());  // glow size in world units
+        rnd[i * 4 + 3] = rand();                   // hue mix (green-yellow to warm yellow)
+      }
+      fireGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      fireGeo.setAttribute('aRand', new THREE.BufferAttribute(rnd, 4));
+    }
+    const fireMat = new THREE.ShaderMaterial({
+      uniforms: fireUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute vec4 aRand;
+        uniform float uTime;
+        uniform float uScale;
+        uniform float uBlink;
+        varying float vBright;
+        varying float vHue;
+        void main() {
+          float t = uTime;
+          vec3 p = position;
+          p.x += sin(t * 0.23 * aRand.y + aRand.x * 6.283) * 0.7 + sin(t * 0.11 + aRand.x * 3.0) * 0.35;
+          p.y += sin(t * 0.31 * aRand.y + aRand.x * 9.0) * 0.45 + sin(t * 0.13 + aRand.x * 5.0) * 0.25;
+          p.z += cos(t * 0.19 * aRand.y + aRand.x * 4.0) * 0.7;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          float s = sin(t * (0.6 + aRand.y * 0.7) + aRand.x * 40.0) * 0.5 + 0.5;
+          float b = mix(0.75, 0.06 + 0.94 * smoothstep(0.5, 0.92, s), uBlink);
+          vBright = b;
+          vHue = aRand.w;
+          gl_PointSize = min(aRand.z * uScale / -mv.z * (0.55 + 0.6 * b), 160.0);
+        }
+      `,
+      fragmentShader: `
+        varying float vBright;
+        varying float vHue;
+        void main() {
+          float d = length(gl_PointCoord - 0.5) * 2.0;
+          if (d > 1.0) discard;
+          float halo = pow(1.0 - d, 3.0);
+          float core = smoothstep(0.2, 0.0, d);
+          vec3 warm = mix(vec3(0.72, 1.0, 0.25), vec3(1.0, 0.88, 0.32), vHue);
+          vec3 c = warm * halo * 0.95 + vec3(1.0, 1.0, 0.8) * core * 1.3;
+          gl_FragColor = vec4(c * vBright, 1.0);
+        }
+      `
+    });
+    const fireflies = new THREE.Points(fireGeo, fireMat);
+    fireflies.frustumCulled = false;
+    scene.add(fireflies);
+
+    // Keeps the glow size correct for the current canvas height and field of view.
+    function updateFireScale() {
+      fireUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+    }
+    updateFireScale();
+
+    // --- 10. ANIMATION: the bloom opens, then everything sways gently ---
+    let bloomProgress = reduceMotion ? 1 : 0;
+    const clock = new THREE.Clock();
+    let slowFrames = 0;
+    let firstFrame = true;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const rawDt = clock.getDelta();
+      const dt = Math.min(rawDt, 0.05);
+      const elapsed = clock.getElapsedTime();
+
+      // Quality governor: if frames stay slow, step the pixel ratio down (never below 1).
+      slowFrames = rawDt > 0.034 && rawDt < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+      if (slowFrames > 45 && pixelRatio > 1) {
+        pixelRatio = Math.max(1, pixelRatio - 0.25);
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        updateFireScale();
+        slowFrames = 0;
+      }
+
+      if (bloomProgress < 1) bloomProgress = Math.min(1, bloomProgress + dt * 0.4);
+      const ease = easeOutCubic(bloomProgress);
+      petalMesh.morphTargetInfluences[0] = ease;
+      calyxMesh.morphTargetInfluences[0] = ease;
+      bloom.rotation.y = (1 - ease) * -1.0;
+
+      if (!reduceMotion) fireUniforms.uTime.value = elapsed;
+
+      if (!reduceMotion) {
+        sceneRoot.rotation.z = Math.sin(elapsed * 0.85) * 0.024;
+        sceneRoot.rotation.x = Math.cos(elapsed * 0.7) * 0.018;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      if (firstFrame) {
+        firstFrame = false;
+        window.__flowerReady = true;
+        document.getElementById('status').classList.add('hide');
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      updateCameraFraming();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(pixelRatio);
+      updateFireScale();
+    });
+
+    animate();
+  </script>
+</body>
+</html>

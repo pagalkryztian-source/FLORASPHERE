@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Wildflower Meadow</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 72% 26%, rgba(255, 190, 140, 0.22) 0%, rgba(255, 190, 140, 0) 38%),
+        linear-gradient(180deg, #120a24 0%, #2b1a45 40%, #5b3359 64%, #2a1a33 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-arrow:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+    .nav-arrow:active { transform: translateY(-50%) scale(0.94); }
+    .nav-arrow.prev { left: 12px; }
+    .nav-arrow.next { right: 12px; }
+
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .send-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+    .send-btn:active { transform: scale(0.96); }
+    .send-btn.copied {
+      color: #fbcfe8;
+      border-color: rgba(251, 207, 232, 0.45);
+      background: rgba(251, 207, 232, 0.12);
+    }
+
+    @media (max-width: 600px) {
+      .nav-arrow { width: 32px; height: 46px; font-size: 18px; border-radius: 10px; }
+      .nav-arrow.prev { left: 8px; }
+      .nav-arrow.next { right: 8px; }
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower10.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower2.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower1.html">Send to someone</button>
+
+  <script>
+    const sendBtn = document.getElementById('sendToSomeoneBtn');
+    let sendTimer;
+
+    sendBtn.addEventListener('click', async () => {
+      const url = new URL(sendBtn.dataset.targetFile, window.location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        sendBtn.textContent = 'Link copied';
+        sendBtn.classList.add('copied');
+      } catch (err) {
+        console.error('Clipboard write failed:', err);
+        sendBtn.textContent = 'Copy failed';
+        sendBtn.classList.remove('copied');
+      }
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(() => {
+        sendBtn.textContent = 'Send to someone';
+        sendBtn.classList.remove('copied');
+      }, 2000);
+    });
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Y_AXIS = V3(0, 1, 0);
+    const TAU = Math.PI * 2;
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+    // Seeded random: the meadow is identical on every load.
+    const rand = (() => {
+      let s = 7311907;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+    const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
+    // --- 1. RENDERER, SCENE, CAMERA ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(0, 3.8, 10.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.appendChild(renderer.domElement);
+
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+    // Resize only touches aspect and fov, so the user's orbit and zoom are never reset.
+    function frame() {
+      const aspect = window.innerWidth / window.innerHeight;
+      const halfTan = Math.max(Math.tan(THREE.MathUtils.degToRad(20)), 5.0 / (11 * aspect));
+      camera.aspect = aspect;
+      camera.fov = 2 * THREE.MathUtils.radToDeg(Math.atan(halfTan));
+      camera.updateProjectionMatrix();
+    }
+    frame();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.rotateSpeed = 0.7;
+    controls.enablePan = false;
+    controls.minDistance = 4;
+    controls.maxDistance = 18;
+    controls.minPolarAngle = 0.25;
+    controls.maxPolarAngle = Math.PI * 0.485;
+    controls.target.set(0, 0.8, 0);
+
+    // --- 2. LIGHTING: warm low sun, cool sky, violet backlight ---
+    scene.add(new THREE.HemisphereLight(0xd8dcff, 0x34502a, 0.9));
+
+    const sun = new THREE.DirectionalLight(0xffe0b5, 2.9);
+    sun.position.set(6, 8, 6);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.shadow.bias = -0.0005;
+    sun.shadow.normalBias = 0.04;
+    scene.add(sun);
+
+    const back = new THREE.DirectionalLight(0xb8a8ff, 1.6);
+    back.position.set(-6, 4, -7);
+    scene.add(back);
+
+    // --- 3. GEOMETRY HELPERS ---
+    // Grid surface. fn(fu, fv) takes fractions 0..1 and returns [x, y, z]; uv = (fu, fv).
+    function buildGrid(nu, nv, fn) {
+      const pos = [];
+      const uv = [];
+      const index = [];
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          const p = fn(i / nu, j / nv);
+          pos.push(p[0], p[1], p[2]);
+          uv.push(i / nu, j / nv);
+        }
+      }
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i;
+          index.push(a, a + nu + 1, a + 1, a + 1, a + nu + 1, a + nu + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Every geometry ends up with position, normal and color only, so they can be merged.
+    function paintUV(geo, fn) {
+      const uv = geo.attributes.uv;
+      const col = [];
+      for (let i = 0; i < uv.count; i++) col.push(...fn(uv.getX(i) * 2 - 1, uv.getY(i)));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    function paintSolid(geo, r, g, b) {
+      const col = [];
+      for (let i = 0; i < geo.attributes.position.count; i++) col.push(r, g, b);
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    const along = (geo, dir) => geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir.clone().normalize()));
+
+    // Tube with a vertex-color gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 16, rad = 5) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = new THREE.Color(c0);
+      const to = new THREE.Color(c1);
+      const col = new THREE.Color();
+      const pos = [];
+      const nor = [];
+      const colors = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        col.lerpColors(from, to, t);
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * TAU;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(col.r, col.g, col.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    // --- 4. FLOWER HEADS ---
+    // A head is rings of petals. Each petal follows a path whose direction angle `a` (from the flower axis)
+    // changes along its length: a0 + a1 * v. That one idea gives flat daisies, bowl poppies, egg tulips and layered roses.
+    // Heads open along +Y with their base at the origin.
+    function petalFlower(rings, widthFn, tint) {
+      const N = 14;
+      const parts = [];
+      for (const ring of rings) {
+        const path = [{ r: ring.r0, y: ring.y0 }];
+        for (let j = 1; j <= N; j++) {
+          const a = ring.a0 + ring.a1 * ((j - 0.5) / N);
+          const p = path[j - 1];
+          path.push({ r: p.r + Math.sin(a) * (ring.L / N), y: p.y + Math.cos(a) * (ring.L / N) });
+        }
+        for (let i = 0; i < ring.n; i++) {
+          const phi = ring.phase + (i * TAU) / ring.n + (rand() - 0.5) * 0.1;
+          const wave = rand() * TAU;
+          const geo = buildGrid(8, N, (fu, fv) => {
+            const u = fu * 2 - 1;
+            const p = path[Math.round(fv * N)];
+            const half = Math.min((ring.hw * widthFn(fv)) / Math.max(p.r, 0.05), (Math.PI / ring.n) * 1.2);
+            const th = phi + u * half;
+            const ruffle = (ring.ruffle || 0) * Math.pow(smooth(0.35, 1, fv), 2) * Math.sin(u * 3.4 + wave) * Math.abs(u);
+            return [p.r * Math.cos(th), p.y + ruffle, p.r * Math.sin(th)];
+          });
+          parts.push(paintUV(geo, tint));
+        }
+      }
+      return mergeGeometries(parts);
+    }
+
+    const sphere = (r, sx, sy, sz, color, x = 0, y = 0, z = 0, ws = 8, hs = 6) => {
+      const g = new THREE.SphereGeometry(r, ws, hs);
+      g.scale(sx, sy, sz);
+      g.translate(x, y, z);
+      return paintSolid(g, ...color);
+    };
+
+    // Daisy: many narrow rounded white rays around a golden dome.
+    const daisyPetals = petalFlower(
+      [{ n: 15, phase: 0, L: 0.52, r0: 0.1, y0: 0.02, a0: 1.35, a1: 0.28, hw: 0.065, ruffle: 0.008 }],
+      (v) => (0.6 + 0.4 * Math.sin(Math.PI * v)) * Math.sqrt(Math.max(0, 1 - Math.pow(v, 5))),
+      (u, v) => [1, lerp(0.8, 1, smooth(0, 0.35, v)), lerp(0.4, 1, smooth(0, 0.35, v))]
+    );
+    const daisyCenter = sphere(0.17, 1, 0.6, 1, [1, 1, 1], 0, 0.02, 0, 12, 8);
+
+    // Cosmos: eight broad overlapping petals, deeper color at the throat.
+    const cosmosPetals = petalFlower(
+      [{ n: 8, phase: 0, L: 0.68, r0: 0.08, y0: 0, a0: 1.2, a1: 0.35, hw: 0.3, ruffle: 0.015 }],
+      (v) => (0.35 + 0.65 * Math.sin(Math.PI * Math.min(v, 1) * 0.5)) * Math.sqrt(Math.max(0, 1 - Math.pow(v, 12))),
+      (u, v) => [lerp(0.5, 1, smooth(0, 0.4, v)), lerp(0.3, 1, smooth(0, 0.4, v)), lerp(0.42, 1, smooth(0, 0.4, v))]
+    );
+    const cosmosCenter = sphere(0.1, 1, 0.7, 1, [1, 1, 1], 0, 0.02, 0, 10, 6);
+
+    // Poppy: four wide crinkled petals in a bowl, black blotch at the base.
+    const poppyPetals = petalFlower(
+      [
+        { n: 2, phase: 0.2, L: 0.62, r0: 0.06, y0: 0.02, a0: 0.55, a1: 0.95, hw: 0.44, ruffle: 0.05 },
+        { n: 2, phase: 0.2 + Math.PI / 2, L: 0.58, r0: 0.06, y0: 0.05, a0: 0.6, a1: 0.9, hw: 0.42, ruffle: 0.05 }
+      ],
+      (v) => Math.pow(Math.sin(Math.PI * Math.min(1, 0.1 + 0.9 * Math.pow(v, 0.6))), 0.6),
+      (u, v) => { const k = lerp(0.1, 1, smooth(0.05, 0.32, v)); return [k, k, k]; }
+    );
+    const poppyCenter = (() => {
+      const parts = [sphere(0.1, 1, 0.75, 1, [0.55, 0.65, 0.38], 0, 0.08, 0, 10, 8)];
+      for (let i = 0; i < 30; i++) {
+        const a = (i / 30) * TAU + rand() * 0.2;
+        const tilt = 0.45 + rand() * 0.2;
+        const len = 0.15 + rand() * 0.05;
+        const dir = V3(Math.sin(tilt) * Math.cos(a), Math.cos(tilt), Math.sin(tilt) * Math.sin(a));
+        const fil = new THREE.CylinderGeometry(0.004, 0.005, len, 4, 1);
+        fil.translate(0, len / 2, 0);
+        along(fil, dir).translate(0, 0.03, 0);
+        parts.push(paintSolid(fil, 0.12, 0.06, 0.14));
+        const tip = dir.clone().multiplyScalar(len).add(V3(0, 0.03, 0));
+        parts.push(sphere(0.014, 1, 1, 1, [0.06, 0.03, 0.08], tip.x, tip.y, tip.z, 5, 4));
+      }
+      return mergeGeometries(parts);
+    })();
+
+    // Tulip: two rings of three pointed petals closing into an egg-shaped cup.
+    const tulipPetals = petalFlower(
+      [
+        { n: 3, phase: 0, L: 0.95, r0: 0.1, y0: 0, a0: 0.8, a1: -1.7, hw: 0.28 },
+        { n: 3, phase: Math.PI / 3, L: 0.9, r0: 0.085, y0: 0.02, a0: 0.78, a1: -1.7, hw: 0.25 }
+      ],
+      (v) => (0.5 + 0.5 * Math.sin(Math.PI * Math.pow(v, 0.8))) * Math.sqrt(Math.max(0, 1 - Math.pow(v, 8))),
+      (u, v) => [lerp(0.82, 1, smooth(0, 0.4, v)), 1, lerp(0.8, 1, smooth(0, 0.4, v))]
+    );
+
+    // Rose: five nested rings, closed bud in the middle, outer petals flaring open.
+    const roseWidth = (v) => Math.sqrt(Math.max(0, Math.sin(Math.PI * Math.min(1, 0.12 + 0.88 * v))));
+    const rosePetals = petalFlower(
+      [
+        { n: 3, phase: 0.0, L: 0.32, r0: 0.04, y0: 0.0, a0: 0.45, a1: -0.9, hw: 0.15 },
+        { n: 4, phase: 0.5, L: 0.42, r0: 0.07, y0: -0.01, a0: 0.7, a1: -0.9, hw: 0.19 },
+        { n: 5, phase: 1.1, L: 0.52, r0: 0.09, y0: -0.03, a0: 1.0, a1: -0.7, hw: 0.22 },
+        { n: 6, phase: 0.3, L: 0.62, r0: 0.11, y0: -0.05, a0: 1.25, a1: -0.35, hw: 0.26, ruffle: 0.02 },
+        { n: 7, phase: 0.9, L: 0.7, r0: 0.13, y0: -0.08, a0: 1.45, a1: -0.2, hw: 0.29, ruffle: 0.03 }
+      ],
+      roseWidth,
+      (u, v) => [lerp(0.62, 1, smooth(0, 0.5, v)), lerp(0.5, 1, smooth(0, 0.5, v)), lerp(0.55, 1, smooth(0, 0.5, v))]
+    );
+
+    // Lavender: a spike of tiny whorled florets.
+    const lavenderHead = (() => {
+      const parts = [];
+      for (let k = 0; k < 16; k++) {
+        const t = k / 15;
+        const y = 0.1 + t * 0.9;
+        const rad = 0.05 * (1 - 0.55 * t);
+        const size = 0.042 * (1 - 0.45 * t);
+        for (let i = 0; i < 5; i++) {
+          const a = k * 0.9 + (i / 5) * TAU;
+          const g = new THREE.SphereGeometry(size, 6, 5);
+          g.scale(0.75, 1.6, 0.75);
+          along(g, V3(Math.sin(0.6) * Math.cos(a), Math.cos(0.6), Math.sin(0.6) * Math.sin(a)));
+          g.translate(rad * Math.cos(a), y, rad * Math.sin(a));
+          parts.push(paintSolid(g, lerp(0.75, 1, t), lerp(0.7, 1, t), lerp(0.85, 1, t)));
+        }
+      }
+      parts.push(sphere(0.03, 0.8, 1.6, 0.8, [1, 1, 1], 0, 1.03, 0, 6, 5));
+      return mergeGeometries(parts);
+    })();
+
+    // Baby's breath: airy sprays of tiny white blossoms on hair-thin branches.
+    const fillerHead = (() => {
+      const parts = [];
+      for (let i = 0; i < 12; i++) {
+        const a = rand() * TAU;
+        const tilt = 0.35 + rand() * 0.75;
+        const len = 0.25 + rand() * 0.3;
+        const dir = V3(Math.sin(tilt) * Math.cos(a), Math.cos(tilt), Math.sin(tilt) * Math.sin(a));
+        const br = new THREE.CylinderGeometry(0.004, 0.006, len, 4, 1);
+        br.translate(0, len / 2, 0);
+        parts.push(paintSolid(along(br, dir), 0.35, 0.5, 0.3));
+        const tip = dir.clone().multiplyScalar(len);
+        for (let d = 0; d < 3; d++) {
+          parts.push(sphere(0.026 + rand() * 0.016, 1, 1, 1, [1, 1, 1], tip.x + (rand() - 0.5) * 0.07, tip.y + (rand() - 0.5) * 0.07, tip.z + (rand() - 0.5) * 0.07, 6, 5));
+        }
+      }
+      return mergeGeometries(parts);
+    })();
+
+    // --- 5. STEMS, LEAVES, GRASS ---
+    const stemCurve = new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(0.02, 0.33, 0), V3(0.08, 0.68, 0), V3(0.16, 1, 0)]);
+    const stemTop = stemCurve.getPoint(1);
+    const stemTopDir = stemCurve.getTangent(1);
+    const stemGeo = makeTube(stemCurve, 0.02, 0.014, 0x8caa80, 0xffffff);
+    const stemThinGeo = makeTube(stemCurve, 0.012, 0.008, 0x8caa80, 0xffffff);
+
+    function leafGeometry(halfW, arch, fold) {
+      const geo = buildGrid(6, 12, (fu, fv) => {
+        const u = fu * 2 - 1;
+        const w = halfW * Math.pow(Math.sin(Math.PI * Math.pow(fv, 0.7)), 0.8);
+        return [-u * w, fv, -arch * fv * fv + fold * Math.abs(u) * w];
+      });
+      return paintUV(geo, (u, v) => { const k = lerp(0.6, 1, v) * (1 - 0.15 * Math.abs(u)); return [k, k, k]; });
+    }
+    const leafBroadGeo = leafGeometry(0.17, 0.25, 0.3);
+    const leafLongGeo = leafGeometry(0.06, 0.55, 0.15);
+    const leafTulipGeo = leafGeometry(0.13, 0.6, 0.35);
+
+    // Grass blade: tapered, curved, dark at the root and light at the tip.
+    const bladeGeo = paintUV(buildGrid(1, 5, (fu, fv) => [(fu * 2 - 1) * 0.05 * Math.pow(1 - fv, 0.9), fv, 0.35 * fv * fv]),
+      (u, v) => [lerp(0.35, 1, v), lerp(0.45, 1, v), lerp(0.3, 0.9, v)]);
+
+    // --- 6. MATERIALS ---
+    const env = 0.45;
+    const petalMat = new THREE.MeshPhysicalMaterial({
+      vertexColors: true, roughness: 0.55, sheen: 0.8, sheenRoughness: 0.5, side: THREE.DoubleSide, envMapIntensity: env
+    });
+    const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, envMapIntensity: env });
+    const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, side: THREE.DoubleSide, envMapIntensity: env });
+    const grassUniforms = { uTime: { value: 0 } };
+    const grassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide, envMapIntensity: 0.3 });
+    grassMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = grassUniforms.uTime;
+      shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader.replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        float sw = position.y * position.y;
+        vec3 ip = vec3(instanceMatrix[3][0], 0.0, instanceMatrix[3][2]);
+        transformed.x += sin(uTime * 1.6 + ip.x * 0.7 + ip.z * 0.5) * 0.12 * sw;
+        transformed.z += cos(uTime * 1.2 + ip.x * 0.5) * 0.06 * sw;
+      `);
+    };
+
+    // Every renderable piece of the meadow is an instanced kind.
+    const KINDS = {
+      stem: [stemGeo, solidMat], stemThin: [stemThinGeo, solidMat],
+      leafBroad: [leafBroadGeo, leafMat], leafLong: [leafLongGeo, leafMat], leafTulip: [leafTulipGeo, leafMat],
+      daisy: [daisyPetals, petalMat], daisyC: [daisyCenter, solidMat],
+      cosmos: [cosmosPetals, petalMat], cosmosC: [cosmosCenter, solidMat],
+      poppy: [poppyPetals, petalMat], poppyC: [poppyCenter, solidMat],
+      tulip: [tulipPetals, petalMat], rose: [rosePetals, petalMat],
+      lavender: [lavenderHead, solidMat], filler: [fillerHead, solidMat]
+    };
+
+    // --- 7. GROUND ---
+    // Gentle mound with soft hills; flowers and grass are rooted on it.
+    const groundY = (x, z) => 0.2 * Math.exp(-(x * x + z * z) / 20) + 0.05 * Math.sin(x * 1.1) * Math.cos(z * 0.9);
+
+    const fadeTex = (() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const c = canvas.getContext('2d');
+      const g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
+      g.addColorStop(0, '#fff');
+      g.addColorStop(0.62, '#fff');
+      g.addColorStop(0.93, '#000');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(canvas);
+    })();
+
+    const groundGeo = new THREE.PlaneGeometry(18, 18, 90, 90);
+    groundGeo.rotateX(-Math.PI / 2);
+    {
+      const p = groundGeo.attributes.position;
+      const col = [];
+      for (let i = 0; i < p.count; i++) {
+        p.setY(i, groundY(p.getX(i), p.getZ(i)));
+        const n = 0.5 + 0.5 * Math.sin(p.getX(i) * 2.3 + Math.cos(p.getZ(i) * 1.7) * 2);
+        col.push(lerp(0.07, 0.14, n), lerp(0.13, 0.22, n), lerp(0.05, 0.09, n));
+      }
+      groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      groundGeo.computeVertexNormals();
+    }
+    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 1, alphaMap: fadeTex, transparent: true, envMapIntensity: 0.2
+    }));
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // --- 8. SCATTER THE PLANTS ---
+    const SPECIES = {
+      daisy:    { w: 0.17, h: [1.1, 1.7], s: [0.5, 0.7],  nod: 0.3, colors: [0xffffff, 0xfff4d6, 0xffd3e4, 0xffe36a], center: [0xe8a317, 0xd98e0b], stem: 'stem',     stemLeaf: [2, 'leafBroad', 0.5], basal: [3, 'leafBroad', 0.8] },
+      cosmos:   { w: 0.15, h: [1.5, 2.3], s: [0.55, 0.75], nod: 0.35, colors: [0xe0489a, 0xf58bbd, 0xffe3ee, 0xff8a5c], center: [0xf2b705], stem: 'stemThin', stemLeaf: [3, 'leafLong', 0.5], basal: [2, 'leafLong', 0.8] },
+      poppy:    { w: 0.11, h: [1.3, 1.9], s: [0.6, 0.8],  nod: 0.45, colors: [0xee3a2a, 0xff6f4e, 0xc71f2b, 0xffb02e], center: [0xffffff], stem: 'stemThin', stemLeaf: [2, 'leafBroad', 0.55], basal: [3, 'leafBroad', 0.9] },
+      tulip:    { w: 0.14, h: [1.2, 1.8], s: [0.7, 0.9],  nod: 0.1,  colors: [0xd9253f, 0xffcf3a, 0xf56aa0, 0x8a4bd1, 0xffe0ea, 0xff8a2b], stem: 'stem', stemLeaf: [0, 'leafTulip', 0], basal: [3, 'leafTulip', 1.3] },
+      rose:     { w: 0.1,  h: [1.0, 1.5], s: [0.6, 0.8],  nod: 0.4,  colors: [0xffb199, 0xffc4d2, 0xfff0cf, 0xc2185b, 0xff7a7a], stem: 'stem',     stemLeaf: [4, 'leafBroad', 0.5], basal: [0, 'leafBroad', 0] },
+      lavender: { w: 0.15, h: [1.0, 1.6], s: [0.85, 1.2], nod: 0.1,  colors: [0x8e6cd8, 0x7a4fc4, 0xb9a1f0, 0x6b6fd6], stem: 'stemThin', stemLeaf: [0, 'leafLong', 0], basal: [5, 'leafLong', 1.0], leaf: 0x7f9a7a },
+      filler:   { w: 0.18, h: [1.4, 2.2], s: [0.8, 1.2],  nod: 0.1,  colors: [0xffffff, 0xfff0f6], stem: 'stemThin', stemLeaf: [3, 'leafLong', 0.4], basal: [0, 'leafLong', 0] }
+    };
+    const SPECIES_KEYS = Object.keys(SPECIES);
+    const STEM_GREENS = [0x3d7a35, 0x4a8a3a, 0x5a9440, 0x3a6f3a];
+    const LEAF_GREENS = [0x2f6a35, 0x3d7a3a, 0x4b8a3f, 0x2a5f33];
+
+    function pickSpecies() {
+      let r = rand();
+      for (const k of SPECIES_KEYS) { r -= SPECIES[k].w; if (r <= 0) return k; }
+      return 'filler';
+    }
+
+    const tint = (hex, jitter = 1) => new THREE.Color(hex).offsetHSL((rand() - 0.5) * 0.03 * jitter, (rand() - 0.5) * 0.1 * jitter, (rand() - 0.5) * 0.08 * jitter);
+    const plants = [];
+    const placed = [];
+
+    // Patch outline wobbles with the angle so it never looks like a circle.
+    const patchRadius = (a) => 3.9 + 0.5 * Math.sin(3 * a + 1) + 0.35 * Math.sin(5 * a + 2);
+
+    for (let attempt = 0; attempt < 6000 && plants.length < 140; attempt++) {
+      const a = rand() * TAU;
+      const d = Math.sqrt(rand()) * 4.5;
+      const R = patchRadius(a);
+      if (d > R || rand() > 1 - smooth(R * 0.6, R, d) * 0.6) continue;
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d;
+      if (placed.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 0.42 * 0.42)) continue;
+      placed.push({ x, z });
+
+      const kind = pickSpecies();
+      const sp = SPECIES[kind];
+      const h = lerp(sp.h[0], sp.h[1], rand()) * clamp(1 - z * 0.05, 0.8, 1.25);
+      const base = V3(x, groundY(x, z), z);
+      const plant = { base, phase: rand() * TAU, flex: h / 1.5, delay: d * 0.14 + rand() * 0.6, parts: [] };
+      plants.push(plant);
+      const add = (key, rel, color) => plant.parts.push({ key, rel, color });
+
+      // Most heads lean toward the camera (+Z); a few go their own way.
+      const yaw = rand() < 0.8 ? -Math.PI / 2 + (rand() - 0.5) * 2.2 : rand() * TAU;
+      const qYaw = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, yaw);
+      const bendDir = V3(Math.cos(yaw), 0, -Math.sin(yaw));
+      add(sp.stem, new THREE.Matrix4().compose(V3(0, 0, 0), qYaw, V3(h, h, h)), tint(pick(STEM_GREENS)));
+
+      // Head sits on the stem tip, following the stem direction plus a nod outward.
+      const headDir = stemTopDir.clone().applyQuaternion(qYaw).addScaledVector(bendDir, sp.nod * (0.5 + rand())).normalize();
+      const qHead = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, headDir).multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, rand() * TAU));
+      const headPos = stemTop.clone().multiplyScalar(h).applyQuaternion(qYaw);
+      const s = lerp(sp.s[0], sp.s[1], rand());
+      const headRel = new THREE.Matrix4().compose(headPos, qHead, V3(s, s, s));
+      add(kind, headRel, tint(pick(sp.colors)));
+      if (KINDS[kind + 'C']) add(kind + 'C', headRel, tint(pick(sp.center)));
+
+      // Leaves: a few along the stem, a few fanning out from the root.
+      const leafColor = () => tint(sp.leaf || pick(LEAF_GREENS));
+      const addLeaf = (key, pos, phi, elev, scale) => {
+        const dir = V3(Math.cos(phi) * Math.cos(elev), Math.sin(elev), Math.sin(phi) * Math.cos(elev));
+        const up = V3(0, 1, 0);
+        const y = dir.clone();
+        const zAxis = up.clone().addScaledVector(y, -up.dot(y)).normalize();
+        const m = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(y, zAxis), y, zAxis);
+        const q = new THREE.Quaternion().setFromRotationMatrix(m);
+        add(key, new THREE.Matrix4().compose(pos, q, V3(scale, scale, scale)), leafColor());
+      };
+      const [nStem, stemKey, stemScale] = sp.stemLeaf;
+      for (let i = 0; i < nStem; i++) {
+        const t = 0.12 + (i / Math.max(nStem, 1)) * 0.5 + rand() * 0.08;
+        const p = stemCurve.getPoint(t).multiplyScalar(h).applyQuaternion(qYaw);
+        addLeaf(stemKey, p, rand() * TAU, 0.5 + rand() * 0.5, stemScale * (0.8 + rand() * 0.4));
+      }
+      const [nBasal, basalKey, basalScale] = sp.basal;
+      for (let i = 0; i < nBasal; i++) {
+        addLeaf(basalKey, V3((rand() - 0.5) * 0.06, 0.02, (rand() - 0.5) * 0.06), (i / nBasal) * TAU + rand() * 0.6, 0.35 + rand() * 0.5, basalScale * (0.8 + rand() * 0.5));
+      }
+    }
+
+    // Create one InstancedMesh per kind and hand every part its slot.
+    const meshes = {};
+    const counts = {};
+    for (const p of plants) for (const part of p.parts) counts[part.key] = (counts[part.key] || 0) + 1;
+    for (const key of Object.keys(counts)) {
+      const [geo, mat] = KINDS[key];
+      const mesh = new THREE.InstancedMesh(geo, mat, counts[key]);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      meshes[key] = { mesh, next: 0 };
+      scene.add(mesh);
+    }
+    for (const p of plants) {
+      for (const part of p.parts) {
+        const m = meshes[part.key];
+        part.mesh = m.mesh;
+        part.idx = m.next++;
+        m.mesh.setColorAt(part.idx, part.color);
+      }
+    }
+
+    // Grass fills the whole mound, shorter toward the edges.
+    const GRASS = 5000;
+    const grass = new THREE.InstancedMesh(bladeGeo, grassMat, GRASS);
+    grass.receiveShadow = true;
+    grass.frustumCulled = false;
+    {
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const greens = [0x3f7a2e, 0x6a9a3a, 0x8aa83e, 0x4a8a3a];
+      for (let i = 0; i < GRASS; i++) {
+        const a = rand() * TAU;
+        const d = Math.sqrt(rand()) * 7;
+        const x = Math.cos(a) * d;
+        const z = Math.sin(a) * d;
+        const h = lerp(0.35, 1.1, rand()) * (1 - smooth(4, 7, d) * 0.85);
+        const w = lerp(0.8, 1.4, rand());
+        q.setFromAxisAngle(Y_AXIS, rand() * TAU);
+        m.compose(V3(x, groundY(x, z), z), q, V3(w, h, w));
+        grass.setMatrixAt(i, m);
+        grass.setColorAt(i, tint(pick(greens)));
+      }
+    }
+    scene.add(grass);
+
+    // Fallen petals on the ground.
+    {
+      const litterGeo = petalFlower([{ n: 1, phase: 0, L: 0.3, r0: 0, y0: 0, a0: 1.5, a1: 0, hw: 0.14, ruffle: 0.01 }], roseWidth, () => [1, 1, 1]);
+      const LITTER = 70;
+      const litter = new THREE.InstancedMesh(litterGeo, petalMat, LITTER);
+      litter.receiveShadow = true;
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const e = new THREE.Euler();
+      for (let i = 0; i < LITTER; i++) {
+        const a = rand() * TAU;
+        const d = Math.sqrt(rand()) * 4.6;
+        const x = Math.cos(a) * d;
+        const z = Math.sin(a) * d;
+        const sc = lerp(0.6, 1.1, rand());
+        q.setFromEuler(e.set((rand() - 0.5) * 0.3, rand() * TAU, (rand() - 0.5) * 0.3));
+        m.compose(V3(x, groundY(x, z) + 0.015, z), q, V3(sc, sc, sc));
+        litter.setMatrixAt(i, m);
+        litter.setColorAt(i, tint(pick(SPECIES[pick(SPECIES_KEYS.slice(0, 5))].colors)));
+      }
+      scene.add(litter);
+    }
+
+    // --- 9. FIREFLY MOTES ---
+    const dotTex = (() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 64;
+      const c = canvas.getContext('2d');
+      const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      g.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    })();
+
+    const FLIES = 45;
+    const flyHome = new Float32Array(FLIES * 3);
+    const flyPhase = new Float32Array(FLIES);
+    for (let i = 0; i < FLIES; i++) {
+      flyHome[i * 3] = (rand() - 0.5) * 9;
+      flyHome[i * 3 + 1] = 0.6 + rand() * 2.6;
+      flyHome[i * 3 + 2] = (rand() - 0.5) * 8;
+      flyPhase[i] = rand() * TAU;
+    }
+    const flyGeo = new THREE.BufferGeometry();
+    flyGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flyHome), 3));
+    scene.add(new THREE.Points(flyGeo, new THREE.PointsMaterial({
+      size: 0.1, map: dotTex, color: 0xffe9a6, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending
+    })));
+
+    // --- 10. ANIMATION: plants grow in, then sway in the wind ---
+    const clock = new THREE.Clock();
+    const baseMat = new THREE.Matrix4();
+    const partMat = new THREE.Matrix4();
+    const swayQ = new THREE.Quaternion();
+    const swayE = new THREE.Euler();
+    const scaleV = new THREE.Vector3();
+    let time = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      time += Math.min(clock.getDelta(), 0.05);
+      grassUniforms.uTime.value = time;
+
+      for (const p of plants) {
+        const g = 1 - Math.pow(1 - clamp((time - p.delay) / 1.8, 0, 1), 3);
+        const wind = (Math.sin(time * 1.1 + p.base.x * 0.5 + p.base.z * 0.35 + p.phase * 0.3) * 0.06 + Math.sin(time * 2.3 + p.phase) * 0.014) * p.flex;
+        const side = Math.cos(time * 0.9 + p.base.z * 0.6) * 0.02 * p.flex;
+        swayQ.setFromEuler(swayE.set(side, 0, -wind));
+        baseMat.compose(p.base, swayQ, scaleV.setScalar(Math.max(g, 0.001)));
+        for (const part of p.parts) part.mesh.setMatrixAt(part.idx, partMat.multiplyMatrices(baseMat, part.rel));
+      }
+      for (const key in meshes) meshes[key].mesh.instanceMatrix.needsUpdate = true;
+
+      const fp = flyGeo.attributes.position;
+      for (let i = 0; i < FLIES; i++) {
+        const ph = flyPhase[i];
+        fp.setXYZ(
+          i,
+          flyHome[i * 3] + Math.sin(time * 0.5 + ph) * 0.6,
+          flyHome[i * 3 + 1] + Math.sin(time * 0.8 + ph * 1.3) * 0.3,
+          flyHome[i * 3 + 2] + Math.cos(time * 0.45 + ph) * 0.6
+        );
+      }
+      fp.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      frame();
+    });
+
+    animate();
+  </script>
+</body>
+</html>

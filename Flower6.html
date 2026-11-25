@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Botanical Bigleaf Hydrangea</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 42%, #181c3a 0%, #0b0e1f 58%, #04060f 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    /* Minimalist Left / Right File Switchers */
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      cursor: pointer;
+    }
+
+    .nav-arrow:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+
+    .nav-arrow.prev:active,
+    .nav-arrow.next:active {
+      transform: translateY(-50%) scale(0.94);
+    }
+
+    .nav-arrow.prev {
+      left: 12px;
+    }
+
+    .nav-arrow.next {
+      right: 12px;
+    }
+
+    /* Minimalist Bottom-Right "Send to someone" Button */
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.86);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .send-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+    }
+
+    .send-btn:active {
+      transform: scale(0.96);
+    }
+
+    .send-btn.copied {
+      color: #c4b5fd;
+      border-color: rgba(196, 181, 253, 0.45);
+      background: rgba(196, 181, 253, 0.14);
+    }
+
+    @media (max-width: 600px) {
+      .nav-arrow {
+        width: 32px;
+        height: 46px;
+        font-size: 18px;
+        border-radius: 10px;
+      }
+
+      .nav-arrow.prev {
+        left: 8px;
+      }
+
+      .nav-arrow.next {
+        right: 8px;
+      }
+
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower5.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower7.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower6.html">
+    Send to someone
+  </button>
+
+  <script>
+    (function setupLinkCopy() {
+      const btn = document.getElementById('sendToSomeoneBtn');
+      if (!btn) return;
+
+      let resetTimer = null;
+
+      function getFlowerFileUrl() {
+        const targetFile = btn.getAttribute('data-target-file') || 'Flower6.html';
+        try {
+          const currentUrl = new URL(window.location.href);
+          const pathParts = currentUrl.pathname.split('/');
+          if (pathParts[pathParts.length - 1] && pathParts[pathParts.length - 1].includes('.')) {
+            pathParts[pathParts.length - 1] = targetFile;
+          } else {
+            if (!currentUrl.pathname.endsWith('/')) {
+              pathParts.push('');
+            }
+            pathParts.push(targetFile);
+          }
+          currentUrl.pathname = pathParts.join('/').replace(/\/{2,}/g, '/');
+          return currentUrl.toString();
+        } catch (e) {
+          return targetFile;
+        }
+      }
+
+      async function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (err) {
+            // Fall through to execCommand fallback
+          }
+        }
+
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.setAttribute('readonly', '');
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '-9999px';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+
+        const selection = document.getSelection();
+        const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+
+        let copied = false;
+        try {
+          copied = document.execCommand('copy');
+        } catch (err) {
+          copied = false;
+        }
+
+        document.body.removeChild(textArea);
+        if (selectedRange && selection) {
+          selection.removeAllRanges();
+          selection.addRange(selectedRange);
+        }
+        return copied;
+      }
+
+      btn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const urlToCopy = getFlowerFileUrl();
+        const success = await copyTextToClipboard(urlToCopy);
+
+        btn.textContent = success ? 'Link copied' : urlToCopy;
+        btn.classList.add('copied');
+
+        if (resetTimer) clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => {
+          btn.textContent = 'Send to someone';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    })();
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const TAU = Math.PI * 2;
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+    // Seeded random: the shrub is identical on every load.
+    const rng = (() => {
+      let s = 6060606;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    // --- 1. SCENE, CAMERA & RENDERER (background unchanged) ---
+    let pixelRatio = Math.min(window.devicePixelRatio, 2);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0b0e1f, 0.02);
+
+    const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+    const CAM_DIST = 8.6;
+    camera.position.set(0.15, 2.1, CAM_DIST);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(pixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    document.body.appendChild(renderer.domElement);
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.45;
+
+    // Resize only touches aspect and fov, so the viewer's orbit and zoom are never reset.
+    function updateCameraFraming() {
+      const aspect = window.innerWidth / window.innerHeight;
+      const halfTan = Math.max(Math.tan(THREE.MathUtils.degToRad(19.5)), 2.9 / (CAM_DIST * aspect));
+      camera.aspect = aspect;
+      camera.fov = 2 * THREE.MathUtils.radToDeg(Math.atan(halfTan));
+      camera.updateProjectionMatrix();
+    }
+    updateCameraFraming();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.rotateSpeed = 0.75;
+    controls.zoomSpeed = 0.85;
+    controls.panSpeed = 0.75;
+    controls.minDistance = 3.2;
+    controls.maxDistance = 17;
+    controls.target.set(0, 0.7, 0);
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN
+    };
+
+    // --- 2. BOTANICAL STUDIO LIGHTING ---
+    scene.add(new THREE.AmbientLight(0xf3e8ff, 0.56));
+
+    const keyLight = new THREE.DirectionalLight(0xfffaf2, 2.35);
+    keyLight.position.set(4.5, 10, 6.5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.left = -4.5;
+    keyLight.shadow.camera.right = 4.5;
+    keyLight.shadow.camera.top = 5;
+    keyLight.shadow.camera.bottom = -5;
+    keyLight.shadow.camera.near = 2;
+    keyLight.shadow.camera.far = 26;
+    keyLight.shadow.bias = -0.0004;
+    keyLight.shadow.normalBias = 0.02;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0xdbeafe, 1.55);
+    rimLight.position.set(-5, 6, -6);
+    scene.add(rimLight);
+
+    const periwinkleFill = new THREE.PointLight(0x818cf8, 1.5, 14);
+    periwinkleFill.position.set(3.5, 2.5, 3.8);
+    scene.add(periwinkleFill);
+
+    const foliageBounce = new THREE.PointLight(0x34d399, 0.9, 12);
+    foliageBounce.position.set(-3.2, -1.6, 3.2);
+    scene.add(foliageBounce);
+
+    // --- 3. PROCEDURAL TEXTURES ---
+
+    // Natural, slightly dusty hydrangea tones. Every sepal starts with a pale cream-green claw
+    // (where it joins the tiny fertile bud), then washes into blue, lilac or pink toward a paler, softer margin.
+    const VARIANTS = {
+      pale:       { stops: ['#f2f1ea', '#e7edfa', '#b6c9f0', '#9fb5e8'], vein: 'rgba(70, 90, 150, 0.16)' },
+      blue:       { stops: ['#ebf0e2', '#bdd1f5', '#7b9bea', '#6a80da'], vein: 'rgba(40, 55, 130, 0.2)' },
+      periwinkle: { stops: ['#eceae8', '#d0d3f6', '#9a98ec', '#8576dc'], vein: 'rgba(55, 50, 130, 0.2)' },
+      lilac:      { stops: ['#f0ece8', '#e3d0f6', '#b98cea', '#a06ad8'], vein: 'rgba(80, 50, 130, 0.2)' },
+      pink:       { stops: ['#f6efe9', '#fbd7eb', '#ee8cc4', '#df5fa6'], vein: 'rgba(130, 40, 90, 0.2)' },
+      fresh:      { stops: ['#d6e8a2', '#e2efc4', '#c6e0d4', '#a6c2dc'], vein: 'rgba(60, 100, 80, 0.16)' }
+    };
+    const VARIANT_NAMES = Object.keys(VARIANTS);
+
+    function createSepalTexture(name) {
+      const { stops, vein } = VARIANTS[name];
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createRadialGradient(128, 250, 8, 128, 120, 230);
+      grad.addColorStop(0.00, stops[0]);
+      grad.addColorStop(0.20, stops[1]);
+      grad.addColorStop(0.62, stops[2]);
+      grad.addColorStop(1.00, stops[3]);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Watercolour mottling, and a hint of a second hue so no two sepals match exactly.
+      for (let i = 0; i < 50; i++) {
+        const x = rng() * 256;
+        const y = rng() * 256;
+        const r = 14 + rng() * 38;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        const t = rng();
+        g.addColorStop(0, t < 0.4 ? 'rgba(255,255,255,0.11)' : t < 0.75 ? 'rgba(60,50,140,0.07)' : 'rgba(210,120,170,0.07)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+
+      // A paler, thinner margin, as on real sepals.
+      const edge = ctx.createRadialGradient(128, 130, 70, 128, 130, 150);
+      edge.addColorStop(0, 'rgba(255,255,255,0)');
+      edge.addColorStop(1, 'rgba(255,255,255,0.16)');
+      ctx.fillStyle = edge;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Fine netted veins: a pale midrib, then delicate branching laterals.
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(128, 256);
+      ctx.lineTo(128, 24);
+      ctx.stroke();
+
+      ctx.strokeStyle = vein;
+      ctx.lineWidth = 0.9;
+      for (let i = 1; i <= 6; i++) {
+        const yStart = 245 - i * 32;
+        const span = Math.sin((i / 7) * Math.PI) * 100;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(128, yStart);
+          ctx.quadraticCurveTo(128 + side * span * 0.55, yStart - 14, 128 + side * span, yStart - 42);
+          ctx.stroke();
+          for (let k = 1; k <= 2; k++) {
+            const sx = 128 + side * span * 0.28 * k;
+            const sy = yStart - 8 - k * 6;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + side * 14, sy - 22);
+            ctx.stroke();
+          }
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    // Matte-satin mid-green leaf with pale sunken veins and a fine cross-vein net.
+    function createBigleafTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 512, 0, 0);
+      grad.addColorStop(0.00, '#2f7a2c');
+      grad.addColorStop(0.50, '#4d9a35');
+      grad.addColorStop(1.00, '#7ab83e');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let i = 0; i < 90; i++) {
+        const x = rng() * 512;
+        const y = rng() * 512;
+        const r = 18 + rng() * 44;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, rng() < 0.5 ? 'rgba(170,210,110,0.07)' : 'rgba(10,40,15,0.08)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+
+      // Fine cross-veins between the laterals.
+      ctx.strokeStyle = 'rgba(190, 225, 140, 0.10)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 260; i++) {
+        const x = 40 + rng() * 432;
+        const y = 30 + rng() * 450;
+        const a = rng() * TAU;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(a) * 16, y + Math.sin(a) * 16);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(205, 232, 160, 0.62)';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(256, 512);
+      ctx.lineTo(256, 16);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(190, 225, 140, 0.34)';
+      ctx.lineWidth = 2;
+      for (let y = 470; y >= 70; y -= 40) {
+        const t = (512 - y) / 512;
+        const span = Math.sin(Math.pow(t, 0.75) * Math.PI) * 190;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(256, y);
+          ctx.quadraticCurveTo(256 + side * span * 0.55, y - 14, 256 + side * span, y - 50);
+          ctx.stroke();
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    function createSoftGlowTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+      grad.addColorStop(0.5, 'rgba(224, 231, 255, 0.55)');
+      grad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    // --- 4. SCULPTED GEOMETRIES ---
+
+    // Broad rounded sepal: narrow claw, wide shoulders, soft point, shallow dish,
+    // margins that turn up and a crinkled edge. Lies along +Y, dishes toward +Z.
+    function createSepalGeometry(length, width, cupDepth) {
+      const geo = new THREE.PlaneGeometry(1, 1, 6, 8);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const u = pos.getX(i) * 2;
+        const v = pos.getY(i) + 0.5;
+        const shoulders = Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(v, 0.82))), 0.55);
+        const profile = 0.14 * (1 - v) + 0.96 * shoulders;
+        const dish = (1 - u * u) * cupDepth * Math.pow(Math.sin(Math.PI * Math.min(v * 1.05, 1)), 0.8);
+        const edgeCurl = -0.07 * Math.pow(Math.abs(u), 2.5) * smooth(0.25, 1, v);
+        const ripple = Math.sin(u * Math.PI * 3.2 + v * 4.0) * 0.022 * smooth(0.25, 1, v) * Math.abs(u);
+        const tipCurl = -0.06 * v * v * v;
+        pos.setXYZ(i, u * 0.5 * width * profile, v * length, dish + edgeCurl + ripple + tipCurl);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Natural bigleaf blade. Ovate with a rounded heart-shaped base, a drawn-out tip and sharp uneven teeth.
+    // The midrib arches and bends sideways, the blade folds into a trough along it, the cross-section twists
+    // along its length, and the margin undulates, so no two leaves are straight or alike.
+    function createBigleafGeometry(length, width, o) {
+      const geo = new THREE.PlaneGeometry(width, length, 20, 44);
+      geo.translate(0, length / 2, 0);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const v = y / length;
+        const u = x / (width / 2);
+
+        let contour;
+        if (v < 0.4) contour = 0.3 + 0.7 * Math.pow(Math.sin((v / 0.4) * Math.PI * 0.5), 0.7);
+        else contour = Math.pow(Math.max(0, Math.cos(((v - 0.4) / 0.6) * Math.PI * 0.5)), 0.85);
+
+        const tooth = (v * 10 + (u > 0 ? 0.5 : 0) + o.seed) % 1;
+        const saw = 1 - 0.07 * tooth * (v > 0.12 && v < 0.96 ? 1 : 0) * smooth(0.35, 0.95, Math.abs(u));
+        const hx = x * contour * saw;
+
+        const trough = o.fold * Math.abs(hx);
+        const pucker = Math.sin(v * Math.PI * 8 + o.seed) * 0.02 * (1 - u * u) * Math.sin(v * Math.PI);
+        const wave = Math.sin(v * 17 + o.seed * 2 + (u > 0 ? 1.7 : 0)) * 0.05 * u * u * Math.sin(Math.PI * Math.min(v * 1.1, 1));
+        const zc = trough + pucker + wave;
+
+        const th = o.twist * v;
+        const cx = hx * Math.cos(th) - zc * Math.sin(th);
+        const cz = hx * Math.sin(th) + zc * Math.cos(th);
+
+        // Local +Z points down once the leaf is tilted outward, so a positive arch droops the blade.
+        const arch = Math.pow(v, 1.6) * length * o.bend * 1.1;
+        const side = o.curl * length * Math.sin(v * Math.PI * 0.9) * 0.45;
+        pos.setXYZ(i, side + cx, y * (1 - 0.12 * o.bend * v), arch + cz);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Tapered tube with a colour gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 40, rad = 10) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = new THREE.Color(c0);
+      const to = new THREE.Color(c1);
+      const c = new THREE.Color();
+      const pos = [];
+      const nor = [];
+      const colors = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        c.lerpColors(from, to, smooth(0, 1, t));
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * TAU;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(c.r, c.g, c.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    // --- 5. THE SHRUB: STEM, NODES, PETIOLED LEAVES ---
+    const hydrangeaGroup = new THREE.Group();
+    scene.add(hydrangeaGroup);
+
+    const stemCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.03, -2.85, -0.04),
+      new THREE.Vector3(-0.12, -1.6, 0.06),
+      new THREE.Vector3(0.08, -0.4, -0.03),
+      new THREE.Vector3(0.00, 1.10, 0.00)
+    ]);
+
+    // An ordinary green flower stem: smooth, gently curved, slimming toward the head, no joints.
+    const stemMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.0 });
+    const mainStem = new THREE.Mesh(makeTube(stemCurve, 0.078, 0.048, '#4f8a3a', '#7db251', 48, 14), stemMat);
+    mainStem.castShadow = true;
+    mainStem.receiveShadow = true;
+    hydrangeaGroup.add(mainStem);
+
+    const bigleafTex = createBigleafTexture();
+    const baseLeafMat = new THREE.MeshPhysicalMaterial({
+      map: bigleafTex,
+      bumpMap: bigleafTex,
+      bumpScale: 1.0,
+      roughness: 0.4,
+      metalness: 0.0,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.35,
+      sheen: 0.35,
+      sheenColor: new THREE.Color(0xc4e8a0),
+      side: THREE.DoubleSide
+    });
+    const petioleMat = new THREE.MeshStandardMaterial({ color: 0x6f9a40, roughness: 0.55 });
+
+    // Opposite pairs, each pair turned about 90 degrees from the one below, but every leaf gets its own
+    // droop, roll, bend, twist and trough so the foliage looks grown rather than stamped.
+    const leafSpecs = [];
+    const addPair = (t, baseRot, size, tilt) => {
+      for (let k = 0; k < 2; k++) {
+        leafSpecs.push({
+          t: t + k * 0.012,
+          rotY: baseRot + k * Math.PI + (rng() - 0.5) * 0.5,
+          tilt: tilt + (rng() - 0.5) * 0.55,
+          roll: (rng() - 0.5) * 0.8,
+          size: [size[0] * (0.9 + rng() * 0.2), size[1] * (0.9 + rng() * 0.2)],
+          bend: 0.16 + rng() * 0.22,
+          curl: (rng() - 0.5) * 0.5,
+          twist: (rng() - 0.5) * 0.9,
+          fold: -0.25 + rng() * 0.35,
+          seed: rng() * 6
+        });
+      }
+    };
+    addPair(0.18, 0.4, [1.9, 1.45], 1.45);
+    addPair(0.38, 1.95, [2.3, 1.75], 1.3);
+    addPair(0.55, 0.3, [2.15, 1.6], 1.15);
+    addPair(0.70, 1.9, [1.85, 1.38], 1.05);
+    addPair(0.82, 0.2, [1.5, 1.12], 1.1);
+
+    const petioleGeo = makeTube(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, -0.02, 0), new THREE.Vector3(0.01, 0.12, 0.05),
+      new THREE.Vector3(0, 0.26, 0.03), new THREE.Vector3(0, 0.33, -0.02)
+    ]), 0.032, 0.016, '#5f8f3a', '#74a548', 8, 6);
+    const PETIOLE = 0.32;
+    const animatedLeaves = [];
+
+    leafSpecs.forEach((cfg, idx) => {
+      const pt = stemCurve.getPoint(cfg.t);
+      const pivot = new THREE.Group();
+      pivot.position.copy(pt);
+      pivot.rotation.order = 'YXZ';
+      pivot.rotation.set(cfg.tilt, cfg.rotY, cfg.roll);
+
+      const petiole = new THREE.Mesh(petioleGeo, petioleMat);
+      petiole.castShadow = true;
+      pivot.add(petiole);
+
+      // A little yellow-green to deep green variation from leaf to leaf.
+      const mat = baseLeafMat.clone();
+      mat.color.setRGB(0.88 + rng() * 0.22, 0.95 + rng() * 0.1, 0.8 + rng() * 0.2);
+      const blade = new THREE.Mesh(createBigleafGeometry(cfg.size[0], cfg.size[1], cfg), mat);
+      blade.position.y = PETIOLE;
+      blade.castShadow = true;
+      blade.receiveShadow = true;
+      pivot.add(blade);
+
+      hydrangeaGroup.add(pivot);
+      animatedLeaves.push({ pivot, baseTilt: cfg.tilt, phase: idx * 0.85 });
+
+    });
+
+    // --- 6. THE MOPHEAD: A ROUNDED GLOBE OF FLAT, OVERLAPPING FLORETS ---
+    const mopheadCenter = new THREE.Vector3(0, 1.55, 0);
+    const mopheadGroup = new THREE.Group();
+    mopheadGroup.position.copy(mopheadCenter);
+    hydrangeaGroup.add(mopheadGroup);
+
+
+    // Plan every floret first so each colour variant gets an exactly sized InstancedMesh.
+    // Flowers inside the flowers: an outer skin, then progressively smaller, shadier shells inside it.
+    const layers = [
+      { n: 260, r: 1.0,  shade: 1.0 },
+      { n: 80,  r: 0.72, shade: 0.8 },
+      { n: 36,  r: 0.45, shade: 0.65 },
+      { n: 14,  r: 0.25, shade: 0.5 }
+    ];
+    const layerOf = [];
+    layers.forEach((L, li) => { for (let k = 0; k < L.n; k++) layerOf.push({ L, k, li }); });
+    const FLORETS = layerOf.length;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const domeRX = 1.55;
+    const domeRY = 1.35;
+    const domeRZ = 1.55;
+    const floretData = [];
+    const Y_AXIS = new THREE.Vector3(0, 1, 0);
+    const X_AXIS = new THREE.Vector3(1, 0, 0);
+
+    for (let i = 0; i < FLORETS; i++) {
+      const { L, k, li } = layerOf[i];
+      const frac = (k + 0.5) / L.n;
+      // From the crown down past the equator, so the head reads as a nearly full globe.
+      const yNorm = 1 - frac * 1.6;
+      const ring = Math.sqrt(Math.max(0, 1 - yNorm * yNorm));
+      const theta = i * golden + (rng() - 0.5) * 0.25;
+
+      // Florets sit at slightly different depths, so they shingle over one another naturally.
+      const depth = (0.93 + rng() * 0.12) * L.r;
+      const pos = new THREE.Vector3(
+        Math.cos(theta) * ring * domeRX * depth,
+        (yNorm * domeRY + (rng() - 0.5) * 0.08) * depth,
+        Math.sin(theta) * ring * domeRZ * depth
+      );
+
+      // Colour grades smoothly across the head like the photo: cool blue on one side, lilac through the middle, pink on the other.
+      const g = 0.5 + 0.38 * (pos.x / domeRX) - 0.18 * (pos.y / domeRY) + 0.12 * (pos.z / domeRZ) + (rng() - 0.5) * 0.3;
+      let variant;
+      if (yNorm < -0.25 && rng() < 0.4) variant = 'fresh';
+      else if (rng() < 0.07) variant = 'pale';
+      else if (g < 0.26) variant = 'blue';
+      else if (g < 0.48) variant = 'periwinkle';
+      else if (g < 0.68) variant = 'lilac';
+      else variant = 'pink';
+
+      // Lie flat against the surface of the globe, with a natural wobble.
+      const normal = new THREE.Vector3(pos.x / domeRX, (pos.y + 0.05) / domeRY, pos.z / domeRZ).normalize();
+      const quat = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, normal);
+      quat.multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, rng() * TAU));
+      quat.multiply(new THREE.Quaternion().setFromAxisAngle(X_AXIS, (rng() - 0.5) * 0.4));
+
+      const scale = (0.4 + 0.14 * rng()) * (yNorm < -0.1 ? 0.92 : 1);
+      const matrix = new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(scale, scale, scale));
+
+      // Four broad sepals in an X, the odd floret with five. One pair sits a touch higher, so they overlap like petals.
+      const sepalCount = i % 9 === 0 ? 5 : 4;
+      const sepals = [];
+      for (let s = 0; s < sepalCount; s++) {
+        sepals.push({
+          yaw: new THREE.Quaternion().setFromAxisAngle(Y_AXIS, (s / sepalCount) * TAU + (rng() - 0.5) * 0.18),
+          open: (s % 2 === 0 ? 1.46 : 1.36) + (rng() - 0.5) * 0.14,
+          size: (s % 2 === 0 ? 1.04 : 0.95) * (0.92 + rng() * 0.16),
+          phase: i * 0.35 + s * 0.8,
+          idx: 0
+        });
+      }
+
+      floretData.push({ pos, quat, scale, matrix, variant, sepals, shade: L.shade, layer: li, delay: frac * 1.8 + rng() * 0.3 });
+    }
+
+    // A real branching inflorescence: stem tip -> primary branches -> secondary -> tertiary branches ->
+    // one slim stalk per floret. One natural green tree connects every flower in the head.
+    {
+      const tubes = [];
+      const bow = (a, b, k) => {
+        const mid = a.clone().lerp(b, 0.5);
+        mid.add(new THREE.Vector3((rng() - 0.5) * k, (rng() - 0.5) * k * 0.6, (rng() - 0.5) * k));
+        return new THREE.CatmullRomCurve3([a, mid, b]);
+      };
+      const addTube = (a, b, r0, r1, k) => tubes.push(makeTube(bow(a, b, k), r0, r1, '#5f8f3a', '#7ab04e', 6, 5));
+      const shell = (n, f) => {
+        const pts = [];
+        for (let i = 0; i < n; i++) {
+          const yN = 1 - ((i + 0.5) / n) * 1.6;
+          const ring = Math.sqrt(Math.max(0, 1 - yN * yN));
+          const th = i * golden;
+          pts.push(new THREE.Vector3(Math.cos(th) * ring * domeRX * f, yN * domeRY * f, Math.sin(th) * ring * domeRZ * f));
+        }
+        return pts;
+      };
+      const nearest = (pts, p) => {
+        let best = pts[0];
+        let d = Infinity;
+        for (const q of pts) { const dd = q.distanceToSquared(p); if (dd < d) { d = dd; best = q; } }
+        return best;
+      };
+
+      const tip = stemCurve.getPoint(1).sub(mopheadCenter);
+      const hubs = [new THREE.Vector3(0, 0.45, 0)];
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        hubs.push(new THREE.Vector3(Math.cos(a) * 0.3, 0.05 + 0.15 * (k % 2), Math.sin(a) * 0.3));
+      }
+      hubs.forEach((h) => addTube(tip, h, 0.03, 0.02, 0.1));
+      const mids = shell(34, 0.4);
+      mids.forEach((m) => addTube(nearest(hubs, m), m, 0.018, 0.012, 0.12));
+      const outs = shell(50, 0.68);
+      outs.forEach((o) => addTube(nearest(mids, o), o, 0.012, 0.008, 0.1));
+      const inner = mids.concat(outs);
+
+      const branchMesh = new THREE.Mesh(mergeGeometries(tubes), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }));
+      branchMesh.castShadow = true;
+      branchMesh.receiveShadow = true;
+      branchMesh.frustumCulled = false;
+      mopheadGroup.add(branchMesh);
+
+      const parts = [];
+      const up = new THREE.Vector3(0, 1, 0);
+      floretData.forEach((f) => {
+        const start = nearest(f.layer === 0 ? outs : inner, f.pos);
+        const dir = f.pos.clone().sub(start);
+        const len = dir.length();
+        if (len < 0.02) return;
+        const g = new THREE.CylinderGeometry(0.004, 0.008, 1, 4, 1);
+        g.translate(0, 0.5, 0);
+        g.scale(1, len, 1);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, dir.normalize()));
+        g.translate(start.x, start.y, start.z);
+        parts.push(g);
+      });
+      const pedicels = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: 0x7ab04e, roughness: 0.55 }));
+      pedicels.castShadow = true;
+      pedicels.frustumCulled = false;
+      mopheadGroup.add(pedicels);
+    }
+
+    const sepalGeo = createSepalGeometry(0.5, 0.56, 0.04);
+    const variantMeshes = {};
+    const counts = {};
+    floretData.forEach((f) => { counts[f.variant] = (counts[f.variant] || 0) + f.sepals.length; });
+
+    VARIANT_NAMES.forEach((name) => {
+      if (!counts[name]) return;
+      const mat = new THREE.MeshPhysicalMaterial({
+        map: createSepalTexture(name),
+        roughness: 0.5,
+        metalness: 0.0,
+        sheen: 0.8,
+        sheenRoughness: 0.5,
+        sheenColor: new THREE.Color(name === 'pink' ? 0xf9d5e8 : 0xdfe6ff),
+        clearcoat: 0.06,
+        clearcoatRoughness: 0.5,
+        side: THREE.DoubleSide
+      });
+      const mesh = new THREE.InstancedMesh(sepalGeo, mat, counts[name]);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      mopheadGroup.add(mesh);
+      variantMeshes[name] = { mesh, next: 0 };
+    });
+
+    // Each sepal gets a faint brightness and warmth shift so the head never looks stamped.
+    const tint = new THREE.Color();
+    floretData.forEach((f) => {
+      const vm = variantMeshes[f.variant];
+      f.sepals.forEach((s) => {
+        s.idx = vm.next++;
+        const b = (0.88 + rng() * 0.2) * f.shade;
+        vm.mesh.setColorAt(s.idx, tint.setRGB(b * (0.97 + rng() * 0.06), b, b * (0.97 + rng() * 0.06)));
+      });
+    });
+
+    // --- 7. SUBTLE FLOATING POLLEN MOTES ---
+    const dotCount = 70;
+    const dotGeo = new THREE.BufferGeometry();
+    const dotPositions = new Float32Array(dotCount * 3);
+    const dotSpeeds = new Float32Array(dotCount);
+    for (let i = 0; i < dotCount; i++) {
+      dotPositions[i * 3] = (rng() - 0.5) * 9.0;
+      dotPositions[i * 3 + 1] = rng() * 7.5 - 3.2;
+      dotPositions[i * 3 + 2] = (rng() - 0.5) * 9.0;
+      dotSpeeds[i] = 0.08 + rng() * 0.14;
+    }
+    dotGeo.setAttribute('position', new THREE.BufferAttribute(dotPositions, 3));
+    const floatingDots = new THREE.Points(dotGeo, new THREE.PointsMaterial({
+      size: 0.08, map: createSoftGlowTexture(), color: 0xe0e7ff, transparent: true,
+      opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    scene.add(floatingDots);
+
+    // --- 8. ANIMATION ---
+    // Florets unfurl from the crown downward, sepals easing from a folded bud to a flat open star,
+    // then each sepal drifts very slightly in the breeze.
+    const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+    const zero = new THREE.Vector3();
+    const sVec = new THREE.Vector3();
+    const qx = new THREE.Quaternion();
+    const qTmp = new THREE.Quaternion();
+    const local = new THREE.Matrix4();
+    const full = new THREE.Matrix4();
+
+    function updateFlorets(time) {
+      for (let i = 0; i < floretData.length; i++) {
+        const f = floretData[i];
+        const u = clamp((time - f.delay) / 1.5, 0, 1);
+        const e = easeOut(u);
+        const grow = 0.4 + 0.6 * e;
+        const vm = variantMeshes[f.variant].mesh;
+
+        for (const s of f.sepals) {
+          const angle = s.open * e + Math.sin(time * 1.2 + s.phase) * 0.015 * u;
+          qx.setFromAxisAngle(X_AXIS, angle);
+          qTmp.copy(s.yaw).multiply(qx);
+          const sc = grow * s.size;
+          local.compose(zero, qTmp, sVec.set(sc, sc, sc));
+          full.multiplyMatrices(f.matrix, local);
+          vm.setMatrixAt(s.idx, full);
+        }
+
+      }
+      for (const k in variantMeshes) variantMeshes[k].mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    const clock = new THREE.Clock();
+    let time = 0;
+    let slowFrames = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const rawDt = clock.getDelta();
+      const dt = Math.min(rawDt, 0.05);
+      time += dt;
+
+      // Quality governor: if frames stay slow, step the pixel ratio down (never below 1).
+      slowFrames = rawDt > 0.034 && rawDt < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+      if (slowFrames > 45 && pixelRatio > 1) {
+        pixelRatio = Math.max(1, pixelRatio - 0.25);
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        slowFrames = 0;
+      }
+
+      // Gentle garden breeze sway
+      hydrangeaGroup.rotation.z = Math.sin(time * 0.80) * 0.02;
+      hydrangeaGroup.rotation.x = Math.cos(time * 0.65) * 0.014;
+
+      updateFlorets(time);
+
+      animatedLeaves.forEach((l) => {
+        l.pivot.rotation.x = l.baseTilt + Math.sin(time * 1.1 + l.phase) * 0.022;
+      });
+
+      const posAttr = floatingDots.geometry.attributes.position;
+      for (let i = 0; i < dotCount; i++) {
+        let y = posAttr.getY(i) + dt * dotSpeeds[i];
+        if (y > 4.2) y = -3.2;
+        posAttr.setY(i, y);
+      }
+      posAttr.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateCameraFraming();
+    });
+
+    animate();
+  </script>
+</body>
+</html>

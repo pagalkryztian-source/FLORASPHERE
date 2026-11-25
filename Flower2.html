@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Botanical Azalea</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 42%, #2a1431 0%, #110817 60%, #06030a 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-arrow:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+    .nav-arrow:active { transform: translateY(-50%) scale(0.94); }
+    .nav-arrow.prev { left: 12px; }
+    .nav-arrow.next { right: 12px; }
+
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .send-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+    .send-btn:active { transform: scale(0.96); }
+    .send-btn.copied {
+      color: #fbcfe8;
+      border-color: rgba(251, 207, 232, 0.45);
+      background: rgba(251, 207, 232, 0.12);
+    }
+
+    @media (max-width: 600px) {
+      .nav-arrow { width: 32px; height: 46px; font-size: 18px; border-radius: 10px; }
+      .nav-arrow.prev { left: 8px; }
+      .nav-arrow.next { right: 8px; }
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower1.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower3.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower2.html">Send to someone</button>
+
+  <script>
+    const sendBtn = document.getElementById('sendToSomeoneBtn');
+    let sendTimer;
+
+    sendBtn.addEventListener('click', async () => {
+      const url = new URL(sendBtn.dataset.targetFile, window.location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        sendBtn.textContent = 'Link copied';
+        sendBtn.classList.add('copied');
+      } catch (err) {
+        console.error('Clipboard write failed:', err);
+        sendBtn.textContent = 'Copy failed';
+        sendBtn.classList.remove('copied');
+      }
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(() => {
+        sendBtn.textContent = 'Send to someone';
+        sendBtn.classList.remove('copied');
+      }, 2000);
+    });
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Y_AXIS = V3(0, 1, 0);
+    const X_AXIS = V3(1, 0, 0);
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+    // Seeded random: the plant looks identical on every load.
+    const rand = (() => {
+      let s = 20260611;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    // --- 1. RENDERER, SCENE, CAMERA ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    camera.position.set(1.4, 1.2, 9.4);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.body.appendChild(renderer.domElement);
+
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+    // Resize only touches aspect and fov, so the user's orbit and zoom are never reset.
+    // Narrow screens widen the fov so the whole plant stays in frame.
+    function frame() {
+      const aspect = window.innerWidth / window.innerHeight;
+      const halfTan = Math.max(Math.tan(THREE.MathUtils.degToRad(19)), 2.8 / (9.4 * aspect));
+      camera.aspect = aspect;
+      camera.fov = 2 * THREE.MathUtils.radToDeg(Math.atan(halfTan));
+      camera.updateProjectionMatrix();
+    }
+    frame();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.rotateSpeed = 0.75;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 16;
+    controls.target.set(0, 0.1, 0);
+    controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+    // --- 2. LIGHTING ---
+    scene.add(new THREE.HemisphereLight(0xffeef5, 0x2a1030, 0.75));
+
+    const key = new THREE.DirectionalLight(0xfff4e6, 2.6);
+    key.position.set(4, 8, 7);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 0.5, far: 30 });
+    key.shadow.camera.updateProjectionMatrix();
+    key.shadow.bias = -0.0005;
+    key.shadow.normalBias = 0.03;
+    scene.add(key);
+
+    const rim = new THREE.DirectionalLight(0xffd6ea, 1.8);
+    rim.position.set(-5, 5, -6);
+    scene.add(rim);
+
+    const blush = new THREE.PointLight(0xff9fc4, 14, 0, 2);
+    blush.position.set(3, 1, 5);
+    scene.add(blush);
+
+    // --- 3. PROCEDURAL TEXTURES ---
+    function canvasTex(w, h, draw) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      draw(canvas.getContext('2d'), w, h);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    // Azalea petal: cream-green throat, rose body, deeper margins, fine veins, crimson throat speckles.
+    function petalTexture(spotCount, vMin, vMax, spread) {
+      return canvasTex(512, 512, (c, W, H) => {
+        const g = c.createLinearGradient(0, H, 0, 0);
+        g.addColorStop(0.0, '#f3efc6');
+        g.addColorStop(0.18, '#fdeaf1');
+        g.addColorStop(0.42, '#f8b4d1');
+        g.addColorStop(0.75, '#ee5b9f');
+        g.addColorStop(1.0, '#e03d8b');
+        c.fillStyle = g;
+        c.fillRect(0, 0, W, H);
+
+        const edge = c.createLinearGradient(0, 0, W, 0);
+        edge.addColorStop(0.0, 'rgba(190, 30, 110, 0.28)');
+        edge.addColorStop(0.25, 'rgba(190, 30, 110, 0)');
+        edge.addColorStop(0.75, 'rgba(190, 30, 110, 0)');
+        edge.addColorStop(1.0, 'rgba(190, 30, 110, 0.28)');
+        c.fillStyle = edge;
+        c.fillRect(0, 0, W, H);
+
+        c.lineCap = 'round';
+        c.lineWidth = 1.3;
+        c.strokeStyle = 'rgba(150, 20, 80, 0.09)';
+        for (let i = -12; i <= 12; i++) {
+          c.beginPath();
+          c.moveTo(W / 2 + i * 10, H);
+          c.bezierCurveTo(W / 2 + i * 14, H * 0.6, W / 2 + i * 18, H * 0.3, W / 2 + i * 19, 0);
+          c.stroke();
+        }
+
+        for (let i = 0; i < spotCount; i++) {
+          const x = W / 2 + ((rand() + rand() + rand() - 1.5) / 1.5) * spread;
+          const y = H * (1 - lerp(vMin, vMax, rand()));
+          const r = 2.5 + rand() * 5.5;
+          const sg = c.createRadialGradient(x, y, 0, x, y, r);
+          sg.addColorStop(0.0, 'rgba(115, 8, 60, 0.9)');
+          sg.addColorStop(0.65, 'rgba(135, 15, 75, 0.6)');
+          sg.addColorStop(1.0, 'rgba(135, 15, 75, 0)');
+          c.fillStyle = sg;
+          c.beginPath();
+          c.arc(x, y, r, 0, Math.PI * 2);
+          c.fill();
+        }
+      });
+    }
+
+    const leafTex = canvasTex(256, 512, (c, W, H) => {
+      const g = c.createLinearGradient(0, H, 0, 0);
+      g.addColorStop(0.0, '#27602f');
+      g.addColorStop(0.5, '#2f7238');
+      g.addColorStop(1.0, '#43904b');
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
+
+      c.lineCap = 'round';
+      c.strokeStyle = 'rgba(200, 230, 170, 0.5)';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(W / 2, H);
+      c.lineTo(W / 2, 10);
+      c.stroke();
+
+      c.strokeStyle = 'rgba(200, 230, 170, 0.22)';
+      c.lineWidth = 1.4;
+      for (let y = H - 30; y > 70; y -= 38) {
+        for (const s of [-1, 1]) {
+          c.beginPath();
+          c.moveTo(W / 2, y);
+          c.quadraticCurveTo(W / 2 + s * 60, y - 20, W / 2 + s * 100, y - 60);
+          c.stroke();
+        }
+      }
+    });
+
+    // --- 4. GEOMETRY BUILDERS ---
+    // Grid surface. fn(fu, fv) takes fractions 0..1 and returns [x, y, z, uvU, uvV].
+    // Winding is chosen so computed normals point along (v direction) x (u direction).
+    function buildGrid(nu, nv, fn) {
+      const pos = [];
+      const uv = [];
+      const index = [];
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          const [x, y, z, u, v] = fn(i / nu, j / nv);
+          pos.push(x, y, z);
+          uv.push(u, v);
+        }
+      }
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i;
+          const b = a + 1;
+          const c = a + nu + 1;
+          index.push(a, c, b, b, c, c + 1);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Tube with per-ring radius and a vertex-color gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 40, rad = 8) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = new THREE.Color(c0);
+      const to = new THREE.Color(c1);
+      const col = new THREE.Color();
+      const pos = [];
+      const colors = [];
+      const nor = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        col.lerpColors(from, to, t);
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * Math.PI * 2;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(col.r, col.g, col.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    // Orientation whose local +Y is `dir` and whose local +Z leans toward `ref` (the dorsal / upper side).
+    function basisQuat(dir, ref) {
+      const y = dir.clone().normalize();
+      const z = ref.clone().addScaledVector(y, -ref.dot(y)).normalize();
+      const x = new THREE.Vector3().crossVectors(y, z);
+      return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    }
+
+    // --- 5. AZALEA COROLLA: five lobes fused into a funnel, morphing from closed bud to open bloom ---
+    const LF = 1.5;   // corolla slant length
+    const SU = 16;    // segments across a lobe
+    const SS = 28;    // segments along a lobe
+    const PHI = [0, 1, 2, 3, 4].map((k) => Math.PI / 2 + (k * Math.PI * 2) / 5);   // lobe 0 = dorsal (+Z)
+
+    // Funnel profile: the axis tilt grows along the length, so the throat opens into a flared mouth.
+    function meridian(open) {
+      const a0 = 0.12;
+      const a1 = lerp(-0.05, 1.3, open);
+      const out = [];
+      let r = 0.09;
+      let h = 0;
+      for (let j = 0; j <= SS; j++) {
+        const s = j / SS;
+        const a = a0 + (a1 - a0) * Math.pow(s, 1.6);
+        out.push({ r: r + (1 - open) * 0.17 * Math.sin(Math.PI * s), h, a });
+        const am = a0 + (a1 - a0) * Math.pow((j + 0.5) / SS, 1.6);
+        r += Math.sin(am) * (LF / SS);
+        h += Math.cos(am) * (LF / SS);
+      }
+      return out;
+    }
+
+    function corollaGeometries(open) {
+      const M = meridian(open);
+      const geos = PHI.map((phi, k) => buildGrid(SU, SS, (fu, fs) => {
+        const u = fu * 2 - 1;
+        const m = M[Math.round(fs * SS)];
+        const t = Math.max(0, (fs - 0.3) / 0.7);
+        const lobeWidth = (1 + 0.1 * Math.sin(Math.PI * t)) * Math.sqrt(Math.max(0, 1 - Math.pow(t, 2.2)));
+        const th = phi + u * (Math.PI / 5) * lobeWidth;
+
+        const frill = Math.sin(u * Math.PI * 1.4 + k * 1.7) * 0.045 * Math.abs(u) * Math.pow(smooth(0.5, 1, fs), 2) * (0.3 + 0.7 * open);
+        const pillow = 0.05 * (1 - u * u) * Math.sin(Math.PI * t) * open;
+        const d = frill + pillow + 0.005 * k * smooth(0.3, 0.5, fs);
+
+        const ca = Math.cos(m.a);
+        const sa = Math.sin(m.a);
+        const c = Math.cos(th);
+        const s = Math.sin(th);
+        return [(m.r + ca * d) * c, m.h - sa * d, (m.r + ca * d) * s, fu, fs];
+      }));
+
+      // Adjacent lobes touch along the tube: share edge normals so there is no visible seam.
+      for (let k = 0; k < 5; k++) {
+        const A = geos[k].attributes.normal;
+        const B = geos[(k + 1) % 5].attributes.normal;
+        for (let j = 0; j <= 8; j++) {
+          const ia = j * (SU + 1) + SU;
+          const ib = j * (SU + 1);
+          const n = V3(A.getX(ia) + B.getX(ib), A.getY(ia) + B.getY(ib), A.getZ(ia) + B.getZ(ib)).normalize();
+          A.setXYZ(ia, n.x, n.y, n.z);
+          B.setXYZ(ib, n.x, n.y, n.z);
+        }
+      }
+      return geos;
+    }
+
+    const delta = (a, b) => new THREE.Float32BufferAttribute(a.array.map((v, i) => v - b.array[i]), 3);
+    const closedGeos = corollaGeometries(0);
+    const openGeos = corollaGeometries(1);
+    const petalGeos = closedGeos.map((g, k) => {
+      g.morphAttributes.position = [delta(openGeos[k].attributes.position, g.attributes.position)];
+      g.morphAttributes.normal = [delta(openGeos[k].attributes.normal, g.attributes.normal)];
+      g.morphTargetsRelative = true;
+      return g;
+    });
+
+    const petalMat = (tex) => new THREE.MeshPhysicalMaterial({
+      map: tex,
+      roughness: 0.55,
+      sheen: 1,
+      sheenRoughness: 0.45,
+      sheenColor: new THREE.Color(0xffc2dd),
+      emissive: 0xff3d8a,
+      emissiveMap: tex,
+      emissiveIntensity: 0.12,
+      side: THREE.DoubleSide
+    });
+    // Top lobe carries the heavy throat speckles, side lobes a few, lower lobes none.
+    const petalMats = [
+      petalMat(petalTexture(75, 0.4, 0.85, 70)),
+      petalMat(petalTexture(16, 0.5, 0.78, 38)),
+      petalMat(petalTexture(0, 0, 0, 0))
+    ];
+    const lobeMat = [0, 1, 2, 2, 1];
+
+    // Stamens (declinate, curving up past the mouth) and the longer pistil.
+    function buildStamens() {
+      const group = new THREE.Group();
+      const H = 1.15;
+      const antherGeo = new THREE.SphereGeometry(0.04, 10, 8);
+      antherGeo.scale(0.8, 1.8, 0.8);
+      const antherMat = new THREE.MeshStandardMaterial({ color: 0x8c4a2b, roughness: 0.45 });
+
+      for (let k = -2; k <= 2; k++) {
+        const lx = k * 0.17;
+        const curve = new THREE.CatmullRomCurve3([
+          V3(lx * 0.12, 0.05, -0.04),
+          V3(lx * 0.35, H * 0.45, -0.13),
+          V3(lx * 0.85, H * 0.95, -0.2),
+          V3(lx * 1.35, H * 1.28, 0.0),
+          V3(lx * 1.6, H * 1.38, 0.3)
+        ]);
+        group.add(new THREE.Mesh(makeTube(curve, 0.011, 0.008, 0xf7cfe0, 0xf3a6c8, 20, 6), tubeMat));
+        const anther = new THREE.Mesh(antherGeo, antherMat);
+        anther.position.copy(curve.getPoint(1));
+        anther.quaternion.setFromUnitVectors(Y_AXIS, curve.getTangent(1));
+        group.add(anther);
+      }
+
+      const pistil = new THREE.CatmullRomCurve3([
+        V3(0, 0.05, 0),
+        V3(0, H * 0.5, -0.06),
+        V3(0.03, H * 1.0, -0.1),
+        V3(0.05, H * 1.35, 0.08),
+        V3(0.05, H * 1.5, 0.34)
+      ]);
+      group.add(new THREE.Mesh(makeTube(pistil, 0.014, 0.01, 0xf3b9d2, 0xe58cb5, 24, 6), tubeMat));
+      const stigma = new THREE.Mesh(
+        new THREE.SphereGeometry(0.04, 10, 8),
+        new THREE.MeshStandardMaterial({ color: 0xe9f5c4, roughness: 0.35 })
+      );
+      stigma.position.copy(pistil.getPoint(1));
+      group.add(stigma);
+      return group;
+    }
+
+    // --- 6. SHARED PLANT PARTS ---
+    const tubeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65 });
+    const stamenProto = buildStamens();
+
+    const calyxProto = new THREE.Mesh(
+      new THREE.LatheGeometry([
+        new THREE.Vector2(0.0, -0.02),
+        new THREE.Vector2(0.08, 0.0),
+        new THREE.Vector2(0.13, 0.07),
+        new THREE.Vector2(0.14, 0.14),
+        new THREE.Vector2(0.115, 0.17)
+      ], 20),
+      new THREE.MeshStandardMaterial({ color: 0x6f9a4a, roughness: 0.6, side: THREE.DoubleSide })
+    );
+    calyxProto.castShadow = true;
+
+    // Flower bud: scaly green base shading into a pink tip.
+    const budGeo = (() => {
+      const pts = [];
+      for (let i = 0; i <= 14; i++) {
+        const t = i / 14;
+        pts.push(new THREE.Vector2(0.2 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.75)), 0.9), t * 0.62));
+      }
+      const geo = new THREE.LatheGeometry(pts, 14);
+      const scale = new THREE.Color(0x6b7a3a);
+      const pink = new THREE.Color(0xe8559a);
+      const col = new THREE.Color();
+      const colors = [];
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        col.lerpColors(scale, pink, smooth(0.3, 0.65, p.getY(i) / 0.62));
+        colors.push(col.r, col.g, col.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      return geo;
+    })();
+    const budMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 });
+
+    // Elliptic, pointed, slightly folded and drooping leaf.
+    const leafGeo = buildGrid(8, 16, (fu, fv) => {
+      const u = fu * 2 - 1;
+      const w = 0.21 * Math.pow(Math.sin(Math.PI * Math.pow(fv, 0.78)), 0.85);
+      const z = -fv * fv * 0.3 + Math.abs(u) * w * 0.35 + Math.sin(fv * 11 + u * 1.5) * 0.008 * Math.abs(u);
+      return [-u * w, fv, z, fu, fv];
+    });
+    const leafMat = new THREE.MeshStandardMaterial({
+      map: leafTex,
+      roughness: 0.5,
+      emissive: 0x0a2a10,
+      emissiveIntensity: 0.25,
+      side: THREE.DoubleSide
+    });
+
+    // --- 7. BUILD THE PLANT ---
+    const azalea = new THREE.Group();
+    scene.add(azalea);
+
+    const flowers = [];
+    const buds = [];
+    const leaves = [];
+    const FLOWER_UP = V3(0, 1, 0.35);
+    const LEAF_UP = V3(0, 1, 0);
+
+    function addTube(curve, r0, r1, c0, c1, seg, rad) {
+      const mesh = new THREE.Mesh(makeTube(curve, r0, r1, c0, c1, seg, rad), tubeMat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      azalea.add(mesh);
+    }
+
+    // A short flower stalk; returns the point where the flower or bud attaches.
+    function pedicel(from, dir, len) {
+      const to = from.clone().addScaledVector(dir, len);
+      const mid = from.clone().lerp(to, 0.5).add(V3(0, -0.04 * len, 0));
+      addTube(new THREE.CatmullRomCurve3([from, mid, to]), 0.034, 0.028, 0x6f8f45, 0x86a652, 12, 6);
+      return to;
+    }
+
+    function addFlower(from, dir, ped, scale, delay) {
+      const d = dir.clone().normalize();
+      const group = new THREE.Group();
+      group.position.copy(pedicel(from, d, ped));
+      group.quaternion.copy(basisQuat(d, FLOWER_UP));
+      azalea.add(group);
+
+      const petals = petalGeos.map((geo, k) => {
+        const mesh = new THREE.Mesh(geo, petalMats[lobeMat[k]]);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+        return mesh;
+      });
+      const stamens = stamenProto.clone();
+      group.add(calyxProto.clone(), stamens);
+      flowers.push({ group, petals, stamens, scale, delay, phase: rand() * 6.28 });
+    }
+
+    function addBud(from, dir, ped, size) {
+      const d = dir.clone().normalize();
+      const mesh = new THREE.Mesh(budGeo, budMat);
+      mesh.position.copy(pedicel(from, d, ped));
+      mesh.quaternion.setFromUnitVectors(Y_AXIS, d);
+      mesh.scale.setScalar(size);
+      mesh.castShadow = true;
+      azalea.add(mesh);
+      buds.push({ mesh, size, phase: rand() * 6.28 });
+    }
+
+    // A whorl of leaves fanning out from one node, drooping at the tips like real azalea foliage.
+    function addWhorl(point, count, size, elevation, phase) {
+      for (let i = 0; i < count; i++) {
+        const phi = phase + (i / count) * Math.PI * 2 + (rand() - 0.5) * 0.35;
+        const dir = V3(Math.cos(phi) * Math.cos(elevation), Math.sin(elevation), Math.sin(phi) * Math.cos(elevation));
+        const mesh = new THREE.Mesh(leafGeo, leafMat);
+        mesh.position.copy(point);
+        mesh.scale.setScalar(size * (0.85 + rand() * 0.3));
+        mesh.quaternion.copy(basisQuat(dir, LEAF_UP));
+        mesh.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, (rand() - 0.5) * 0.5));
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        azalea.add(mesh);
+        leaves.push({ mesh, base: mesh.quaternion.clone(), phase: rand() * 6.28 });
+      }
+    }
+
+    // Main woody stem, tapering and shifting from bark brown to young green.
+    const stem = new THREE.CatmullRomCurve3([
+      V3(0.05, -2.7, -0.1),
+      V3(-0.18, -1.5, 0.08),
+      V3(0.12, -0.3, -0.06),
+      V3(-0.08, 0.5, 0.08),
+      V3(0.0, 1.0, 0.05)
+    ]);
+    addTube(stem, 0.085, 0.036, 0x5b3f2e, 0x6e8a3f, 60, 10);
+
+    addWhorl(stem.getPoint(0.14), 3, 0.95, 0.15, 0.4);
+    addWhorl(stem.getPoint(0.30), 5, 1.0, 0.2, 1.1);
+    addWhorl(stem.getPoint(0.56), 5, 1.05, 0.2, 2.3);
+    addWhorl(stem.getPoint(0.82), 6, 1.1, 0.12, 0.7);
+
+    // Right shoot carrying a second open flower.
+    const rightStart = stem.getPoint(0.5);
+    const rightShoot = new THREE.CatmullRomCurve3([rightStart, rightStart.clone().add(V3(0.5, 0.25, 0.15)), V3(1.25, 0.05, 0.55)]);
+    addTube(rightShoot, 0.04, 0.026, 0x6b5a36, 0x7f9b4a, 24, 8);
+    addWhorl(rightShoot.getPoint(0.8), 4, 0.8, 0.2, 0.3);
+    addFlower(rightShoot.getPoint(1), V3(0.6, 0.4, 0.7), 0.45, 0.78, 1.9);
+
+    // Left shoot carrying a bud.
+    const leftStart = stem.getPoint(0.36);
+    const leftShoot = new THREE.CatmullRomCurve3([leftStart, leftStart.clone().add(V3(-0.45, 0.2, 0.1)), V3(-1.0, 0.55, 0.25)]);
+    addTube(leftShoot, 0.04, 0.026, 0x6b5a36, 0x7f9b4a, 24, 8);
+    addWhorl(leftShoot.getPoint(0.8), 4, 0.8, 0.2, 1.7);
+    addBud(leftShoot.getPoint(1), V3(-0.5, 0.8, 0.3), 0.3, 1.0);
+
+    // The truss at the stem tip: four open flowers (staggered bloom) and three buds.
+    const tip = stem.getPoint(1);
+    addFlower(tip, V3(0.05, 0.35, 0.94), 0.55, 1.0, 0.3);
+    addFlower(tip, V3(-0.9, 0.3, 0.3), 0.65, 0.92, 0.9);
+    addFlower(tip, V3(0.92, 0.2, 0.15), 0.7, 0.95, 1.4);
+    addFlower(tip, V3(-0.2, 0.95, -0.2), 0.6, 0.9, 1.9);
+    addBud(tip, V3(-0.7, 0.45, -0.55), 0.45, 1.0);
+    addBud(tip, V3(0.6, 0.5, -0.65), 0.5, 0.9);
+    addBud(tip, V3(0.5, 0.75, 0.2), 0.45, 0.85);
+
+    scene.traverse((o) => { if (o.isMesh) o.material.envMapIntensity = 0.5; });
+
+    // --- 8. FLOATING POLLEN MOTES ---
+    const dotTex = canvasTex(64, 64, (c) => {
+      const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      g.addColorStop(0.5, 'rgba(255, 255, 255, 0.6)');
+      g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 64, 64);
+    });
+
+    const DOTS = 60;
+    const dotPos = new Float32Array(DOTS * 3);
+    const dotPhase = new Float32Array(DOTS);
+    for (let i = 0; i < DOTS; i++) {
+      dotPos[i * 3] = (rand() - 0.5) * 10;
+      dotPos[i * 3 + 1] = rand() * 7 - 3;
+      dotPos[i * 3 + 2] = (rand() - 0.5) * 8;
+      dotPhase[i] = rand() * 6.28;
+    }
+    const dotGeo = new THREE.BufferGeometry();
+    dotGeo.setAttribute('position', new THREE.BufferAttribute(dotPos, 3));
+    scene.add(new THREE.Points(dotGeo, new THREE.PointsMaterial({
+      size: 0.075,
+      map: dotTex,
+      color: 0xfce7f3,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })));
+
+    // --- 9. ANIMATION ---
+    const clock = new THREE.Clock();
+    const sway = new THREE.Quaternion();
+    let time = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      time += dt;
+
+      azalea.rotation.z = Math.sin(time * 0.85) * 0.02;
+      azalea.rotation.x = Math.cos(time * 0.7) * 0.014;
+
+      for (const f of flowers) {
+        const o = 1 - Math.pow(1 - clamp((time - f.delay) / 2.4, 0, 1), 3);
+        const breathe = o * 0.015 * Math.sin(time * 1.3 + f.phase);
+        for (const p of f.petals) p.morphTargetInfluences[0] = o + breathe;
+        f.group.scale.setScalar(f.scale * (0.7 + 0.3 * o));
+        f.stamens.scale.setScalar(0.15 + 0.85 * smooth(0.25, 1, o));
+      }
+
+      for (const b of buds) b.mesh.scale.setScalar(b.size * (1 + 0.02 * Math.sin(time * 1.1 + b.phase)));
+
+      for (const l of leaves) {
+        l.mesh.quaternion.copy(l.base).multiply(sway.setFromAxisAngle(X_AXIS, Math.sin(time * 1.2 + l.phase) * 0.03));
+      }
+
+      const attr = dotGeo.attributes.position;
+      for (let i = 0; i < DOTS; i++) {
+        let y = attr.getY(i) + dt * (0.12 + (i % 5) * 0.03);
+        if (y > 4) y = -3;
+        attr.setY(i, y);
+        attr.setX(i, attr.getX(i) + Math.sin(time * 0.4 + dotPhase[i]) * dt * 0.1);
+      }
+      attr.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      frame();
+    });
+
+    animate();
+  </script>
+</body>
+</html>

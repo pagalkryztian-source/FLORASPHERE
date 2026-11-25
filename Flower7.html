@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Lily of the Valley</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 74% 14%, rgba(255, 253, 238, 0.95) 0, rgba(255, 253, 238, 0.55) 14%, rgba(255, 253, 238, 0) 42%),
+        radial-gradient(circle at 14% 26%, rgba(255, 255, 255, 0.6) 0, rgba(255, 255, 255, 0) 8%),
+        radial-gradient(circle at 30% 12%, rgba(255, 255, 250, 0.5) 0, rgba(255, 255, 250, 0) 6%),
+        radial-gradient(circle at 88% 38%, rgba(255, 255, 245, 0.5) 0, rgba(255, 255, 245, 0) 9%),
+        radial-gradient(circle at 52% 30%, rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0) 7%),
+        linear-gradient(180deg, #f7fbf2 0%, #e6f1dd 34%, #bcd8ad 66%, #6f9a62 100%);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .nav-arrow {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 38px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(40, 70, 50, 0.22);
+      border-radius: 12px;
+      color: rgba(25, 55, 40, 0.85);
+      font-size: 20px;
+      font-weight: 300;
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .nav-arrow:hover { background: rgba(255, 255, 255, 0.7); color: #0f2a1c; }
+    .nav-arrow:active { transform: translateY(-50%) scale(0.94); }
+    .nav-arrow.prev { left: 12px; }
+    .nav-arrow.next { right: 12px; }
+
+    .send-btn {
+      position: fixed;
+      right: 14px;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+      padding: 7px 12px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      color: rgba(25, 55, 40, 0.9);
+      background: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(40, 70, 50, 0.22);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .send-btn:hover { background: rgba(255, 255, 255, 0.7); color: #0f2a1c; }
+    .send-btn:active { transform: scale(0.96); }
+    .send-btn.copied {
+      color: #1d4f8f;
+      border-color: rgba(29, 79, 143, 0.5);
+      background: rgba(190, 215, 255, 0.55);
+    }
+
+    @media (max-width: 600px) {
+      .nav-arrow { width: 32px; height: 46px; font-size: 18px; border-radius: 10px; }
+      .nav-arrow.prev { left: 8px; }
+      .nav-arrow.next { right: 8px; }
+      .send-btn {
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 11px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="Flower6.html" class="nav-arrow prev" aria-label="Previous flower file">&lt;</a>
+  <a href="Flower8.html" class="nav-arrow next" aria-label="Next flower file">&gt;</a>
+  <button type="button" class="send-btn" id="sendToSomeoneBtn" data-target-file="Flower7.html">Send to someone</button>
+
+  <script>
+    const sendBtn = document.getElementById('sendToSomeoneBtn');
+    let sendTimer;
+
+    sendBtn.addEventListener('click', async () => {
+      const url = new URL(sendBtn.dataset.targetFile, window.location.href).href;
+      try {
+        await navigator.clipboard.writeText(url);
+        sendBtn.textContent = 'Link copied';
+        sendBtn.classList.add('copied');
+      } catch (err) {
+        console.error('Clipboard write failed:', err);
+        sendBtn.textContent = 'Copy failed';
+        sendBtn.classList.remove('copied');
+      }
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(() => {
+        sendBtn.textContent = 'Send to someone';
+        sendBtn.classList.remove('copied');
+      }, 2000);
+    });
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    const { clamp, lerp } = THREE.MathUtils;
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    const Y_AXIS = V3(0, 1, 0);
+    const DOWN = V3(0, -1, 0);
+    const TAU = Math.PI * 2;
+    const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const col = (hex) => new THREE.Color(hex);
+
+    // Seeded random: the colony is identical on every load.
+    const rand = (() => {
+      let s = 1905051;
+      return () => {
+        s = (s + 0x6D2B79F5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    })();
+
+    // --- 1. RENDERER (light on purpose: no shadow maps, capped pixel ratio, 3 lights, instanced bells) ---
+    let pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    camera.position.set(0, 2.1, 8.6);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, alpha: true });
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    document.body.appendChild(renderer.domElement);
+
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+    // Resize only touches aspect and fov, so the user's orbit and zoom are never reset.
+    function frame() {
+      const aspect = window.innerWidth / window.innerHeight;
+      const halfTan = Math.max(Math.tan(THREE.MathUtils.degToRad(19)), 3.5 / (8.9 * aspect));
+      camera.aspect = aspect;
+      camera.fov = 2 * THREE.MathUtils.radToDeg(Math.atan(halfTan));
+      camera.updateProjectionMatrix();
+    }
+    frame();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.rotateSpeed = 0.6;
+    controls.enablePan = false;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 16;
+    controls.minPolarAngle = 0.4;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.target.set(0, 1.25, 0);
+
+    // --- 2. LIGHTING: soft morning light ---
+    scene.add(new THREE.HemisphereLight(0xf6fbff, 0x6a8f55, 1.2));
+    const key = new THREE.DirectionalLight(0xfff3dc, 2.4);
+    key.position.set(-3, 7, 6);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfeaff, 0.9);
+    fill.position.set(4, 3, -4);
+    scene.add(fill);
+
+    // --- 3. GEOMETRY HELPERS ---
+    // Grid surface. fn(fu, fv) takes fractions 0..1 and returns [x, y, z]; uv = (fu, fv).
+    function buildGrid(nu, nv, fn) {
+      const pos = [];
+      const uv = [];
+      const index = [];
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          const p = fn(i / nu, j / nv);
+          pos.push(p[0], p[1], p[2]);
+          uv.push(i / nu, j / nv);
+        }
+      }
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = j * (nu + 1) + i;
+          index.push(a, a + nu + 1, a + 1, a + 1, a + nu + 1, a + nu + 2);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Vertex colors from (u -1..1, v 0..1); uv is dropped so the piece can merge with tubes.
+    function paintUV(geo, fn) {
+      const uv = geo.attributes.uv;
+      const colors = [];
+      for (let i = 0; i < uv.count; i++) colors.push(...fn(uv.getX(i) * 2 - 1, uv.getY(i)));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    }
+
+    // Tube with a vertex-color gradient along its length.
+    function makeTube(curve, r0, r1, c0, c1, seg = 24, rad = 6) {
+      const frames = curve.computeFrenetFrames(seg, false);
+      const from = col(c0);
+      const to = col(c1);
+      const c = new THREE.Color();
+      const pos = [];
+      const nor = [];
+      const colors = [];
+      const index = [];
+      for (let i = 0; i <= seg; i++) {
+        const t = i / seg;
+        const p = curve.getPointAt(t);
+        const r = lerp(r0, r1, t);
+        c.lerpColors(from, to, t);
+        for (let j = 0; j <= rad; j++) {
+          const q = (j / rad) * TAU;
+          const n = frames.normals[i].clone().multiplyScalar(Math.cos(q)).addScaledVector(frames.binormals[i], Math.sin(q));
+          pos.push(p.x + n.x * r, p.y + n.y * r, p.z + n.z * r);
+          nor.push(n.x, n.y, n.z);
+          colors.push(c.r, c.g, c.b);
+        }
+      }
+      for (let i = 0; i < seg; i++) {
+        for (let j = 0; j < rad; j++) {
+          const k = i * (rad + 1) + j;
+          const m = k + rad + 1;
+          index.push(k, k + 1, m, k + 1, m + 1, m);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(index);
+      return geo;
+    }
+
+    // --- 4. THE BELL ---
+    // Convallaria flower: a waxy white urn, rounded at the top, narrowing a little at the mouth, with six small
+    // lobes that curl outward. Local frame: attached at the origin, hanging along -Y.
+    const bellGeo = (() => {
+      const NU = 30;
+      const NB = 8;
+      const NL = 4;
+      const profile = new THREE.SplineCurve([
+        new THREE.Vector2(0, 0), new THREE.Vector2(0.08, -0.015), new THREE.Vector2(0.16, -0.07),
+        new THREE.Vector2(0.215, -0.16), new THREE.Vector2(0.215, -0.255), new THREE.Vector2(0.18, -0.32), new THREE.Vector2(0.15, -0.355)
+      ]);
+      const body = [];
+      for (let j = 0; j <= NB; j++) body.push(profile.getPoint(j / NB));
+      const rim = body[NB];
+      const lobeLen = 0.17;
+
+      const geo = buildGrid(NU, NB + NL, (fu, fv) => {
+        const th = fu * TAU;
+        const j = Math.round(fv * (NB + NL));
+        if (j <= NB) return [body[j].x * Math.cos(th), body[j].y, body[j].x * Math.sin(th)];
+        // Six rounded lobes: length follows a cosine, each curling down then outward.
+        const t = (j - NB) / NL;
+        const L = lobeLen * Math.pow(0.5 + 0.5 * Math.cos(6 * th), 0.75);
+        const r = rim.x + L * 0.9 * t * t;
+        return [r * Math.cos(th), rim.y - L * t * (1 - 0.55 * t), r * Math.sin(th)];
+      });
+
+      // Close the seam so shading is continuous around the bell.
+      const n = geo.attributes.normal;
+      for (let j = 0; j <= NB + NL; j++) {
+        const a = j * (NU + 1);
+        const b = a + NU;
+        const v = V3(n.getX(a) + n.getX(b), n.getY(a) + n.getY(b), n.getZ(a) + n.getZ(b)).normalize();
+        n.setXYZ(a, v.x, v.y, v.z);
+        n.setXYZ(b, v.x, v.y, v.z);
+      }
+      // Faint green-cream at the very top, pure waxy white below.
+      return paintUV(geo, (u, v) => {
+        const g = smooth(0.0, 0.3, v);
+        return [lerp(0.84, 1, g), lerp(0.94, 1, g), lerp(0.78, 0.99, g)];
+      });
+    })();
+
+    // Unopened bud: a small green-white ovoid near the tip of the raceme.
+    const budGeo = (() => {
+      const pts = [];
+      for (let i = 0; i <= 5; i++) {
+        const t = i / 5;
+        pts.push(new THREE.Vector2(0.1 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.8), t * 0.22));
+      }
+      const geo = new THREE.LatheGeometry(pts, 8);
+      const p = geo.attributes.position;
+      const colors = [];
+      for (let i = 0; i < p.count; i++) {
+        const k = smooth(0.0, 0.22, p.getY(i));
+        colors.push(lerp(0.66, 0.97, k), lerp(0.84, 1, k), lerp(0.56, 0.92, k));
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.deleteAttribute('uv');
+      return geo;
+    })();
+
+    // --- 5. LEAVES: broad, pointed, folded, arching, parallel-veined ---
+    function leafGeometry(len, halfW, a0, a1) {
+      const NU = 12;
+      const NV = 16;
+      const path = [{ x: 0, y: 0 }];
+      for (let j = 1; j <= NV; j++) {
+        const a = a0 + a1 * ((j - 0.5) / NV);
+        const p = path[j - 1];
+        path.push({ x: p.x + Math.sin(a) * (len / NV), y: p.y + Math.cos(a) * (len / NV) });
+      }
+      const geo = buildGrid(NU, NV, (fu, fv) => {
+        const u = fu * 2 - 1;
+        const p = path[Math.round(fv * NV)];
+        const a = a0 + a1 * fv;
+        const w = halfW * Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(fv, 0.75))), 0.8);
+        // Fold along the midrib (top face concave) plus a slightly wavy margin.
+        const d = Math.abs(u) * w * 0.3 + 0.015 * Math.sin(fv * 14 + u * 3) * Math.abs(u) * smooth(0.2, 1, fv);
+        return [p.x - Math.cos(a) * d, p.y + Math.sin(a) * d, u * w];
+      });
+      const sheath = col('#dcebb8');
+      const dark = col('#2d7a36');
+      const light = col('#4a9d45');
+      const rib = col('#9fd08a');
+      const c = new THREE.Color();
+      return paintUV(geo, (u, v) => {
+        c.lerpColors(dark, light, smooth(0.15, 1, v));
+        c.lerp(sheath, 1 - smooth(0.03, 0.2, v));
+        c.lerp(rib, clamp(1 - Math.abs(u) / 0.1, 0, 1) * 0.45);
+        const vein = 1 + 0.05 * Math.sin(u * Math.PI * 3.5);
+        return [c.r * vein, c.g * vein, c.b * vein];
+      });
+    }
+
+    // --- 6. MATERIALS ---
+    const bellMat = new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.38, side: THREE.DoubleSide, emissive: 0xfff6e0, emissiveIntensity: 0.1, envMapIntensity: 0.7
+    });
+    const budMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+    const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, side: THREE.DoubleSide, envMapIntensity: 0.6 });
+
+    // --- 7. GROUND: mossy woodland floor that fades into the mist ---
+    const groundY = (x, z) => 0.1 * Math.exp(-(x * x + z * z) / 14) + 0.025 * Math.sin(x * 1.4) * Math.cos(z * 1.2);
+
+    function radialTex(stops) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 128;
+      const c = canvas.getContext('2d');
+      const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+      for (const [o, color] of stops) g.addColorStop(o, color);
+      c.fillStyle = g;
+      c.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(canvas);
+    }
+    const fadeTex = radialTex([[0, '#fff'], [0.55, '#fff'], [0.95, '#000']]);
+
+    const groundGeo = new THREE.PlaneGeometry(18, 18, 48, 48);
+    groundGeo.rotateX(-Math.PI / 2);
+    {
+      const p = groundGeo.attributes.position;
+      const colors = [];
+      for (let i = 0; i < p.count; i++) {
+        p.setY(i, groundY(p.getX(i), p.getZ(i)));
+        const n = 0.5 + 0.5 * Math.sin(p.getX(i) * 2.2 + Math.cos(p.getZ(i) * 1.7) * 2.1);
+        const m = 0.5 + 0.5 * Math.sin(p.getX(i) * 5.3 - p.getZ(i) * 4.1);
+        colors.push(lerp(0.09, 0.16, n) + 0.02 * m, lerp(0.2, 0.32, n) + 0.03 * m, lerp(0.06, 0.1, n));
+      }
+      groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      groundGeo.computeVertexNormals();
+    }
+    scene.add(new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 1, alphaMap: fadeTex, transparent: true, envMapIntensity: 0.2
+    })));
+
+    // --- 8. THE COLONY ---
+    const plants = [];
+    const easeOutBack = (x) => { const c1 = 1.70158; const x1 = x - 1; return 1 + (c1 + 1) * x1 * x1 * x1 + c1 * x1 * x1; };
+    const tmpM = new THREE.Matrix4();
+    const tmpV = new THREE.Vector3();
+
+    const leafBig = leafGeometry(2.0, 0.42, 0.08, 1.35);
+    const leafSmall = leafGeometry(1.7, 0.36, 0.1, 1.3);
+
+    // One flowering plant: a leaf pair, an arching scape, and a one-sided raceme of nodding bells.
+    function makePlant({ x, z, yaw, scale, delay, bells }) {
+      const group = new THREE.Group();
+      group.position.set(x, groundY(x, z) - 0.02, z);
+      group.rotation.y = yaw;
+      group.scale.setScalar(scale);
+      scene.add(group);
+
+      // Scape rises between the leaves, then arches over.
+      const scape = new THREE.CatmullRomCurve3([
+        V3(0, 0, 0), V3(0.02, 0.9, 0), V3(0.08, 1.7, 0), V3(0.32, 2.3, 0), V3(0.8, 2.5, 0), V3(1.25, 2.2, 0), V3(1.4, 1.85, 0)
+      ]);
+      const parts = [makeTube(scape, 0.04, 0.018, '#d4e6a8', '#7fb25a', 48, 6)];
+
+      // Leaves flank the scape.
+      parts.push(leafBig.clone().rotateY(1.4));
+      parts.push(leafSmall.clone().rotateY(-1.75));
+
+      const total = bells + 3;
+      const placed = [];
+      for (let i = 0; i < total; i++) {
+        const t = i / (total - 1);
+        const isBud = i >= bells;
+        const s = lerp(0.56, 0.985, t);
+        const P = scape.getPoint(s);
+        const T = scape.getTangent(s);
+
+        // Pedicel leaves the stem on the lower side, alternating left and right.
+        const down = DOWN.clone().addScaledVector(T, -DOWN.dot(T)).normalize();
+        const ang = (i % 2 ? 1 : -1) * (0.35 + rand() * 0.25);
+        const out = down.clone().applyAxisAngle(T, ang);
+        const len = isBud ? 0.1 : lerp(0.3, 0.2, t);
+        const mid = P.clone().addScaledVector(out, len * 0.5).add(V3(0, len * 0.15, 0));
+        const end = P.clone().addScaledVector(out, len * 0.8).addScaledVector(DOWN, len * 0.5);
+        const ped = new THREE.CatmullRomCurve3([P, mid, end]);
+        parts.push(makeTube(ped, 0.012, 0.01, '#8fbf6a', '#c4dd9a', 8, 4));
+
+        const endDir = ped.getTangent(1);
+        let q;
+        let sc;
+        if (isBud) {
+          q = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, T.clone().multiplyScalar(0.7).add(out.clone().multiplyScalar(0.3)).normalize());
+          sc = lerp(1.0, 0.6, (i - bells) / 2);
+        } else {
+          const hang = endDir.clone().multiplyScalar(0.5).add(DOWN.clone().multiplyScalar(0.5)).normalize();
+          q = new THREE.Quaternion().setFromUnitVectors(DOWN, hang).multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, rand() * TAU));
+          sc = lerp(0.82, 0.55, Math.pow(t, 1.4));
+        }
+        placed.push({ pos: end, q, s: sc, isBud, tOpen: delay + 0.8 + i * 0.22 });
+      }
+      group.add(new THREE.Mesh(mergeGeometries(parts), plantMat));
+
+      const bellList = placed.filter((p) => !p.isBud);
+      const budList = placed.filter((p) => p.isBud);
+      const bellMesh = new THREE.InstancedMesh(bellGeo, bellMat, bellList.length);
+      const budMesh = new THREE.InstancedMesh(budGeo, budMat, budList.length);
+      for (const m of [bellMesh, budMesh]) { m.frustumCulled = false; group.add(m); }
+      bellList.forEach((p, i) => { p.idx = i; });
+      budList.forEach((p, i) => { p.idx = i; budMesh.setMatrixAt(i, tmpM.compose(p.pos, p.q, tmpV.setScalar(p.s))); });
+      budMesh.instanceMatrix.needsUpdate = true;
+
+      plants.push({ group, bellList, bellMesh, done: false, end: bellList[bellList.length - 1].tOpen + 1, phase: x * 1.9 + z, scale });
+    }
+
+    makePlant({ x: 0, z: 0, yaw: -0.2, scale: 1.1, delay: 0, bells: 11 });
+    makePlant({ x: -1.7, z: 0.5, yaw: 0.5, scale: 0.95, delay: 0.5, bells: 10 });
+    makePlant({ x: 1.6, z: 0.6, yaw: -1.0, scale: 0.98, delay: 0.9, bells: 10 });
+    makePlant({ x: -0.8, z: -1.0, yaw: 2.5, scale: 0.9, delay: 1.3, bells: 9 });
+    makePlant({ x: 1.0, z: -1.1, yaw: -2.6, scale: 0.92, delay: 1.7, bells: 9 });
+    makePlant({ x: -2.9, z: -0.4, yaw: 0.2, scale: 0.8, delay: 2.1, bells: 8 });
+    makePlant({ x: 2.9, z: -0.3, yaw: -1.4, scale: 0.82, delay: 2.5, bells: 8 });
+
+    // Ground-cover leaf pairs (non-flowering shoots) make the carpet lush.
+    {
+      const COVER = 30;
+      const cover = new THREE.InstancedMesh(leafGeometry(1.5, 0.36, 0.2, 1.15), plantMat, COVER);
+      cover.frustumCulled = false;
+      const q = new THREE.Quaternion();
+      const e = new THREE.Euler();
+      const tints = ['#ffffff', '#eefbe6', '#f6ffe0', '#e2f5e0'];
+      for (let i = 0; i < COVER; i++) {
+        const a = rand() * TAU;
+        const d = Math.sqrt(rand()) * 4.6;
+        const x = Math.cos(a) * d;
+        const z = Math.sin(a) * d * 0.8;
+        const sc = lerp(0.5, 1.0, rand()) * (1 - smooth(3, 4.6, d) * 0.4);
+        q.setFromEuler(e.set((rand() - 0.5) * 0.25, rand() * TAU, (rand() - 0.5) * 0.25));
+        cover.setMatrixAt(i, tmpM.compose(V3(x, groundY(x, z) - 0.01, z), q, tmpV.setScalar(sc)));
+        cover.setColorAt(i, col(tints[i % tints.length]));
+      }
+      scene.add(cover);
+    }
+
+    // Soft contact shadows ground each plant (one instanced quad per plant).
+    {
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: radialTex([[0, 'rgba(0,0,0,0.55)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false, opacity: 0.5
+      });
+      const quad = new THREE.PlaneGeometry(2.2, 2.2).rotateX(-Math.PI / 2);
+      const shadows = new THREE.InstancedMesh(quad, shadowMat, plants.length);
+      plants.forEach((p, i) => shadows.setMatrixAt(i, tmpM.compose(V3(p.group.position.x, groundY(p.group.position.x, p.group.position.z) + 0.02, p.group.position.z), new THREE.Quaternion(), tmpV.setScalar(p.scale))));
+      scene.add(shadows);
+    }
+
+    // --- 9. SOFT DRIFTING BOKEH (like pollen and dew in morning mist) ---
+    const bokehTex = radialTex([[0, 'rgba(255,255,255,0.9)'], [0.6, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
+    const MOTES = 24;
+    const moteHome = new Float32Array(MOTES * 3);
+    const motePhase = new Float32Array(MOTES);
+    for (let i = 0; i < MOTES; i++) {
+      const a = (i * 2.399) % TAU;
+      const d = 1.2 + ((i * 0.618) % 1) * 4.5;
+      moteHome[i * 3] = Math.cos(a) * d;
+      moteHome[i * 3 + 1] = 0.6 + ((i * 0.37) % 1) * 3;
+      moteHome[i * 3 + 2] = Math.sin(a) * d * 0.5 - 0.5;
+      motePhase[i] = i * 1.3;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(moteHome), 3));
+    scene.add(new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.32, map: bokehTex, color: 0xfffdf0, transparent: true, opacity: 0.45, depthWrite: false })));
+
+    // --- 10. ANIMATION: bells swell open from the bottom of each raceme upward, then everything sways ---
+    function updateBloom(pl, time) {
+      for (const p of pl.bellList) {
+        const s = p.s * easeOutBack(clamp((time - p.tOpen) / 0.8, 0, 1));
+        pl.bellMesh.setMatrixAt(p.idx, tmpM.compose(p.pos, p.q, tmpV.setScalar(Math.max(s, 0.0001))));
+      }
+      pl.bellMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    const clock = new THREE.Clock();
+    let time = 0;
+    let slowFrames = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const rawDt = clock.getDelta();
+      time += Math.min(rawDt, 0.05);
+
+      // Quality governor: if frames stay slow, step the pixel ratio down (never below 1).
+      slowFrames = rawDt > 0.034 && rawDt < 0.25 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+      if (slowFrames > 45 && pixelRatio > 1) {
+        pixelRatio = Math.max(1, pixelRatio - 0.25);
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        slowFrames = 0;
+      }
+
+      for (const pl of plants) {
+        if (!pl.done) {
+          updateBloom(pl, time);
+          if (time > pl.end) pl.done = true;
+        }
+        pl.group.rotation.z = Math.sin(time * 0.8 + pl.phase) * 0.018;
+        pl.group.rotation.x = Math.cos(time * 0.6 + pl.phase) * 0.012;
+      }
+
+      const mp = moteGeo.attributes.position;
+      for (let i = 0; i < MOTES; i++) {
+        const ph = motePhase[i];
+        mp.setXYZ(i,
+          moteHome[i * 3] + Math.sin(time * 0.3 + ph) * 0.5,
+          moteHome[i * 3 + 1] + Math.sin(time * 0.5 + ph * 1.3) * 0.3,
+          moteHome[i * 3 + 2] + Math.cos(time * 0.28 + ph) * 0.4);
+      }
+      mp.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      frame();
+    });
+
+    animate();
+  </script>
+</body>
+</html>
